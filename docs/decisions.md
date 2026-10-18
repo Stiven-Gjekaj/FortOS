@@ -159,6 +159,27 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   original draws the frame into a framebuffer. Reason: the copy is one
   call at the death, and each other frame has no extra pass.
 
+- **The launch image has the colour of the splash** (0.9). iOS 6 shows it
+  while the app starts, so the start goes to the splash with no black
+  screen. The original on iOS shows its own launch picture.
+
+## The speed on the iPhone 4S
+
+These numbers are from the debug build on the phone, 2026-10-18, with 12
+players. The speed log of the debug build gives them each second.
+
+| What | gts_gantown | bomb_canyon | flag_egypt |
+|---|---|---|---|
+| Frames each second | 60 | 60 | 60 |
+| Update and draw of a frame | 1.5 + 2.2 ms | 1.5 + 2.1 ms | 1.9 + 2.0 ms |
+| Resident memory | 51 MB | 55 MB | 35 MB |
+| Map load, first time | 2.1 s | 2.5 s | 0.8 s |
+| Map load, next times | 0.4 s | 0.4 s | 0.2 s |
+
+- The menus use 26 MB. After a match the app is back at 27 MB.
+- The start takes 1.4 s the first time and 0.5 s the next times. The first
+  time decodes the pictures of the APK into the cache folder beside it.
+
 ## The quirks of the original that stay
 
 - The ray of the sniper rifle ends at the point (cos, sin) x 300 of the
