@@ -94,7 +94,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Save the settings, the controls, and the loadout of each class.
 - Add the texts in each language of the original.
 
-## 0.9: speed and polish
+## 0.9: speed and polish (done, 2026-10-18)
 
 - Hold 60 frames per second with 12 players on each map.
 - Cut the memory: load one map at a time, and free the splash atlas.
