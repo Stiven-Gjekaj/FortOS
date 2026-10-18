@@ -116,10 +116,10 @@ static void on_begin(void *context, FOPhysFixture *a, FOPhysFixture *b, float px
 static void player_contact_end(FOPlayer *p, FOPhysFixture *fixture, FOObj *other);
 
 static void on_end(void *context, FOPhysFixture *a, FOPhysFixture *b) {
-    (void)context;
     FOObj *oa = fo_world_fixture_obj(a), *ob = fo_world_fixture_obj(b);
     if (oa && oa->kind == FO_OBJ_PLAYER && ob) player_contact_end((FOPlayer *)oa, a, ob);
     if (ob && ob->kind == FO_OBJ_PLAYER && oa) player_contact_end((FOPlayer *)ob, b, oa);
+    if (oa && ob) fo_modes_contact((FOWorld *)context, oa, ob, 0);
 }
 
 FOWorld *fo_world_new(const char *tmx_text, unsigned int seed) {
@@ -255,6 +255,13 @@ static void set_team_filters(FOPlayer *p) {
     // start, or the category of the old team.
     unsigned short cats[3] = {1, FO_CAT_RED, FO_CAT_BLU};
     for (int i = 0; i < 3; i++) fo_phys_body_set_filter(p->obj.body, cats[i], bodyCat, bodyMask);
+}
+
+void fo_world_set_team(FOWorld *world, FOPlayer *p, short team) {
+    (void)world;
+    if (p->team == team) return;
+    p->team = team;
+    set_team_filters(p);
 }
 
 FOPlayer *fo_world_add_player(FOWorld *world, int id, short team) {
@@ -645,6 +652,7 @@ static void dispatch_begins(FOWorld *world) {
         if (ob->kind == FO_OBJ_CORPSE && oa->kind == FO_OBJ_GROUND) corpse_land(world, (FOCorpse *)ob, oa);
         if (oa->kind == FO_OBJ_PLAYER) player_contact_begin(world, (FOPlayer *)oa, world->begins[i].a, ob);
         if (ob->kind == FO_OBJ_PLAYER) player_contact_begin(world, (FOPlayer *)ob, world->begins[i].b, oa);
+        fo_modes_contact(world, oa, ob, 1);
     }
     world->begin_count = 0;
 }
@@ -696,6 +704,7 @@ void fo_world_update(FOWorld *world, float dt) {
     }
     fo_combat_update(world, dt);
     fo_classes_sentries(world, dt);
+    fo_modes_objects(world, dt);
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
         FOCorpse *c = &world->players[i].corpse;
         if (c->active && world->now - c->start > 9000) {
@@ -704,20 +713,8 @@ void fo_world_update(FOWorld *world, float dt) {
         }
     }
     map_update(world);
+    fo_modes_update(world, dt);
     for (int i = 0; i < world->door_count; i++) door_update(world, &world->doors[i], dt);
     server_update(world);
-}
-
-// The game modes come in 0.5. Until then each player may cloak and
-// disguise, and no player holds an objective.
-int fo_world_mode_allows(const FOWorld *world, const FOPlayer *p) {
-    (void)world;
-    (void)p;
-    return 1;
-}
-
-int fo_world_holds_objective(const FOWorld *world, const FOPlayer *p) {
-    (void)world;
-    (void)p;
-    return 0;
+    fo_modes_round(world);
 }

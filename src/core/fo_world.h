@@ -70,6 +70,9 @@ typedef enum {
     FO_OBJ_BULLET,      // Bullet (xg)
     FO_OBJ_CORPSE,      // PlayerDeadBody (xs)
     FO_OBJ_PICKUP,      // WeaponPickup (xx)
+    FO_OBJ_BOMB,        // RollableBomb (act)
+    FO_OBJ_CHECKPOINT,  // BombCheckpoint (xf)
+    FO_OBJ_FLAG,        // CtfFlag (acm)
 } FOObjKind;
 
 // The head of each object with a body. The user data of the body points
@@ -238,6 +241,7 @@ typedef enum {
     FO_EVENT_EFFECT,         // name at (x, y). flip is 1 or -1.
     FO_EVENT_KILL,           // a kills b with item, c assists.
     FO_EVENT_HIT,            // a hits b for value damage.
+    FO_EVENT_SHAKE,          // The camera shakes for item ms with the strength value.
 } FOEventKind;
 
 typedef struct {
@@ -249,6 +253,76 @@ typedef struct {
 } FOEvent;
 
 #define FO_MAX_EVENTS 128
+
+// The game modes (MapGameMode, acs.java, and its subclasses).
+typedef enum {
+    FO_MODE_NONE = 0,
+    FO_MODE_KOTH,   // KothMapGameMode (acq.java): gts_gantown
+    FO_MODE_BOMB,   // BombMapGameMode (acl.java): bomb_canyon
+    FO_MODE_CTF,    // CtfMapGamemode (acn.java): flag_egypt
+} FOModeKind;
+
+#define FO_MAX_CHECKPOINTS 4
+
+// BombCheckpoint (xf.java): a gate that stops the bomb from rolling back.
+typedef struct {
+    FOObj obj;
+    float x, y;
+    int active;              // n
+    long long changed;       // o: the time of the last change, for the animation.
+} FOCheckpoint;
+
+// RollableBomb (act.java).
+typedef struct {
+    FOObj obj;
+    int forward;             // p: 1 when RED pushes it to +x.
+    float startX, startY;    // t
+    int red[FO_MAX_PLAYERS], redCount;   // w: the RED pushers, in order.
+    int blu[FO_MAX_PLAYERS], bluCount;   // x
+    long long redPush;       // r: the last time that RED pushed.
+    long long finished;      // s: the time that the bomb went into the finish area.
+    long long hintTime;      // F
+    int hint;                // v: the local player sees the uphill hint.
+    float target;            // q: the speed that the bomb wants.
+    float lastX;             // K
+    FOObj *slopes[8];        // y: the ground under the bomb.
+    int slopeCount;
+} FOBomb;
+
+// CtfFlag (acm.java).
+typedef struct {
+    FOObj obj;
+    short team;              // m: the team of the flag.
+    int carrier;             // n: the id of the carrier, or -1.
+    int dropped;             // o: the flag lies on the ground.
+    float returnTime;        // p: seconds to the return.
+    float homeX, homeY;      // q
+    float angle;
+    int facingLeft;
+} FOFlag;
+
+typedef struct {
+    FOModeKind kind;
+    // King of the hill.
+    float progress;          // a: -100 BLU to 100 RED.
+    float redTimer;          // b
+    float bluTimer;          // c
+    short owner;             // d
+    short lastOwner;         // e: -1 before the first update.
+    int wasOver;             // f
+    // The bomb.
+    FOBomb bomb;
+    FOCheckpoint checkpoints[FO_MAX_CHECKPOINTS];
+    int checkpointCount;
+    float bombTimer;         // e of acl.java: 420 s.
+    float blastX, blastY;    // d of acl.java: the place of the big explosion.
+    long long blastTime;     // c of acl.java.
+    // Capture the flag.
+    FOFlag flags[3];         // By team.
+    int redScore, bluScore;  // d and c of acn.java.
+    int lastBluScore, lastRedScore;      // e and f: for the sounds.
+    int lastRedCarrier, lastBluCarrier;  // g and h
+} FOMode;
 
 #define FO_MAX_DOORS 4
 #define FO_MAX_GROUND (FO_TMX_MAX_BOXES)
@@ -277,6 +351,9 @@ typedef struct FOWorld {
     FOBullet bullets[FO_MAX_BULLETS];
     FOEvent events[FO_MAX_EVENTS];
     int event_count;
+    FOMode mode;
+    long long roundEnd;      // d of ws.java: the time of the next round, or 0.
+    int localId;             // The id of the local player, for the hint of the bomb.
 } FOWorld;
 
 // Makes the world of a map from the text of its .tmx file. Returns NULL
@@ -359,6 +436,25 @@ int fo_world_in_own_spawn(const FOWorld *world, const FOPlayer *player);
 int fo_world_in_area(const FOWorld *world, const FOPlayer *player, FOAreaKind kind);
 // SentryGun.A(): the build of the sentry is done.
 int fo_sentry_is_ready(const FOWorld *world, const FOSentry *sentry);
+
+// Player.b(short) (xn.java:979-1025): the player goes to the other team.
+void fo_world_set_team(FOWorld *world, FOPlayer *player, short team);
+
+// The game mode of the map. Call one of these after fo_world_new.
+void fo_world_koth(FOWorld *world);
+void fo_world_bomb(FOWorld *world, int forward, float startX, float startY, float blastX, float blastY);
+void fo_world_bomb_checkpoint(FOWorld *world, float x, float y);
+void fo_world_ctf(FOWorld *world, float redX, float redY, float bluX, float bluY);
+
+// MapGameMode.h(): the round is over. i(): the team that won, or 0.
+int fo_mode_over(const FOWorld *world);
+int fo_mode_winner(const FOWorld *world);
+// MapGameMode.d(): the bomb is in the fall area. e(): the place where the
+// camera looks at the end.
+int fo_mode_bomb_down(const FOWorld *world);
+void fo_mode_focus(const FOWorld *world, float *x, float *y);
+// MapGameMode.b(): the place of the objective, for the bots.
+void fo_mode_objective(const FOWorld *world, float *x, float *y);
 
 // Adds an event of the frame.
 void fo_world_event(FOWorld *world, FOEventKind kind, const char *name, float x, float y);

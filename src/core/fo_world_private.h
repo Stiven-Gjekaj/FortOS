@@ -40,6 +40,12 @@ int fo_sentry_ready(const FOWorld *world, const FOSentry *sentry);
 
 void fo_combat_weapon_update(FOPlayer *player, float dt);
 
+// fo_modes.c
+void fo_modes_contact(FOWorld *world, FOObj *a, FOObj *b, int begin);
+void fo_modes_objects(FOWorld *world, float dt);
+void fo_modes_update(FOWorld *world, float dt);
+void fo_modes_round(FOWorld *world);
+
 // 1 when the player holds the objective of the mode (MapGameMode.b(xn)).
 int fo_world_holds_objective(const FOWorld *world, const FOPlayer *player);
 
