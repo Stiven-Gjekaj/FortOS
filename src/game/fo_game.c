@@ -20,6 +20,7 @@
 #include "fo_audio.h"
 #include "fo_look.h"
 #include "fo_maps.h"
+#include "fo_prefs.h"
 #include "fo_world.h"
 
 // The size of one art pixel in meters, as GANGFORT draws each region.
@@ -33,13 +34,16 @@ static struct {
     float time;
     FOAtlasTextures sprites;
     FOAtlasTextures ui;       // res/textures/ui.atlas: the menus.
+    FOAtlasTextures splash;   // res/textures/splash.atlas, until the splash ends.
+    int splashLoaded;
+    FOPrefs prefs;            // The settings, next to the APK.
     FOFont pixel4, pixel6, pixel12, pixel21;
     FOText *texts;
     FOMap map;
     int mapLoaded;
     FOBots bots;
     int maxPlayers;           // The players of a match with the human: 8, 10, or 12.
-    int screen;               // FO_VIEW_SINGLE or FO_VIEW_MATCH.
+    int screen;               // FO_VIEW_*.
     int dialog;               // The dialog over the match, or FO_DIALOG_NONE.
     int botsJoined;           // h of xa.java: the bots joined the match.
     FOMixer *mixer;
@@ -77,7 +81,7 @@ static struct {
     int debugScore;
 } G;
 
-enum { FO_VIEW_SINGLE = 0, FO_VIEW_MATCH };
+enum { FO_VIEW_SPLASH = 0, FO_VIEW_MAIN, FO_VIEW_CREDITS, FO_VIEW_SETTINGS, FO_VIEW_SINGLE, FO_VIEW_MATCH };
 enum { FO_DIALOG_NONE = 0, FO_DIALOG_TEAM, FO_DIALOG_CLASS, FO_DIALOG_MENU };
 
 static void fail(const char *message) {
@@ -99,6 +103,14 @@ static void music_fade(float volume, float seconds) {
     G.musicStart = G.time;
     G.musicTime = seconds;
 }
+
+// The settings of SettingsScreen, with the keys of the original (akb.java).
+static int setting(const char *key) {
+    return fo_prefs_int(&G.prefs, key, 1) != 0;
+}
+
+static const char *const kSettingPrefs[FO_SETTING_COUNT] = {"killcam_enabled", "theme_music_enabled",
+                                                            "vignette_enabled"};
 
 const char *fo_game_error(void) {
     return G.error;
@@ -163,17 +175,28 @@ static int start_map(FOMapId id, int play) {
     return 1;
 }
 
-// SingleplayerScreen (agv.java): the first screen.
-static void open_single(void) {
-    fo_sound_stop_all();
+// Opens a menu screen. A match ends, and the music plays at 1.
+static void open_screen(int screen) {
+    if (G.mapLoaded) {
+        fo_sound_stop_all();
+        G.killcam = 0;
+        fo_hud_killcam(NULL);
+        fo_map_free(&G.map);
+        G.mapLoaded = 0;
+    }
     music_fade(1.0f, 0);
-    G.killcam = 0;
-    fo_hud_killcam(NULL);
-    if (G.mapLoaded) fo_map_free(&G.map);
-    G.mapLoaded = 0;
-    G.screen = FO_VIEW_SINGLE;
+    G.screen = screen;
     G.dialog = FO_DIALOG_NONE;
-    fo_single_open();
+    if (screen == FO_VIEW_SINGLE) fo_single_open();
+    if (screen == FO_VIEW_SETTINGS) {
+        int on[FO_SETTING_COUNT];
+        for (int i = 0; i < FO_SETTING_COUNT; i++) on[i] = setting(kSettingPrefs[i]);
+        fo_settings_open(on);
+    }
+}
+
+static void open_single(void) {
+    open_screen(FO_VIEW_SINGLE);
 }
 
 int fo_game_start(const char *apk_path, int width, int height) {
@@ -185,6 +208,12 @@ int fo_game_start(const char *apk_path, int width, int height) {
     G.localClass = FO_CLASS_SOLDIER;
     G.localTeam = FO_TEAM_BLU;
     G.maxPlayers = 12;
+    // The settings are in the folder of the APK.
+    char prefs[512];
+    snprintf(prefs, sizeof(prefs), "%s", apk_path);
+    char *slash = strrchr(prefs, '/');
+    snprintf(slash ? slash + 1 : prefs, sizeof(prefs) - (slash ? (size_t)(slash + 1 - prefs) : 0), "FortOS.prefs");
+    fo_prefs_load(&G.prefs, prefs);
     if (!fo_assets_open(apk_path)) {
         fail("Copy the APK of GANGFORT 2.1 from your copy of the game to\n"
              "/var/mobile/Media/FortOS/GANGFORT.apk\n\n"
@@ -218,9 +247,16 @@ int fo_game_start(const char *apk_path, int width, int height) {
     G.scopeMask = fo_assets_texture("textures/sniper_aim_alpha_mask.png");
     FOHudFonts fonts = {&G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21};
     fo_hud_init(&G.sprites, &fonts, G.texts, width, height);
-    FOScreensSetup screens = {&G.sprites, &G.ui, NULL, &G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21, G.texts, width, height};
+    G.splashLoaded = fo_assets_atlas(&G.splash, "textures/splash.atlas");
+    FOScreensSetup screens = {&G.sprites, &G.ui,     G.splashLoaded ? &G.splash : NULL,
+                              &G.pixel4,  &G.pixel6, &G.pixel12,
+                              &G.pixel21, G.texts,   width,
+                              height};
     fo_screens_init(&screens);
-    open_single();
+    // SplashScreen: no music until the main menu (ahh.java).
+    G.screen = FO_VIEW_SPLASH;
+    music_fade(0.0f, 0);
+    fo_splash_open();
     fprintf(stderr, "start: %.3f s\n", wall_seconds() - start);
     return 1;
 }
@@ -433,7 +469,9 @@ static void killcam_update(FOPlayer *p) {
     if (G.deathAt != 0 && G.time - G.deathAt >= 2.0f && !G.killcam && p) {
         const FOPlayer *k = p->killer != FO_LOCAL_ID ? fo_world_player(w, p->killer) : NULL;
         int hidden = k && k->cls == FO_CLASS_SPY && k->cloaked;
-        if (k && !hidden && !fo_mode_over(w) && !fo_mode_bomb_down(w) && (k->alive || k->corpse.active)) {
+        // With the kill cam off, the original shows its ads here (aeb.java:245-249).
+        int on = setting("killcam_enabled");
+        if (on && k && !hidden && !fo_mode_over(w) && !fo_mode_bomb_down(w) && (k->alive || k->corpse.active)) {
             G.killcam = 1;
             G.captured = 0;
             G.killStart = G.time;
@@ -514,8 +552,20 @@ void fo_game_frame(double dt) {
         G.fpsTime = 0;
     }
     double t0 = wall_seconds();
-    if (G.screen == FO_VIEW_SINGLE) {
-        fo_single_draw((float)dt);
+    if (G.screen != FO_VIEW_MATCH) {
+        if (G.screen == FO_VIEW_SPLASH && fo_splash_draw((float)dt)) {
+            // The splash atlas is not used again.
+            if (G.splashLoaded) fo_assets_atlas_free(&G.splash);
+            G.splashLoaded = 0;
+            fo_screens_init(&(FOScreensSetup){&G.sprites, &G.ui, NULL, &G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21,
+                                              G.texts, G.width, G.height});
+            open_screen(FO_VIEW_MAIN);
+        }
+        if (G.screen == FO_VIEW_MAIN) fo_main_draw();
+        if (G.screen == FO_VIEW_CREDITS) fo_credits_draw();
+        if (G.screen == FO_VIEW_SETTINGS) fo_settings_draw();
+        if (G.screen == FO_VIEW_SINGLE) fo_single_draw((float)dt);
+        fo_sound_music(music_now() * setting("theme_music_enabled"));
         fo_gfx_flush();
         return;
     }
@@ -594,7 +644,7 @@ void fo_game_frame(double dt) {
     }
     G.wasOver = over;
     killcam_update(p);
-    fo_sound_music(music_now());
+    fo_sound_music(music_now() * setting("theme_music_enabled"));
     double t1 = wall_seconds();
     fo_gfx_begin(G.width, G.height, fo_rgb(0x000000));
     if (G.killcam) {
@@ -605,7 +655,7 @@ void fo_game_frame(double dt) {
     } else {
         draw_world();
         draw_hud();
-        if (!G.noVignette) fo_gfx_vignette();
+        if (!G.noVignette && setting("vignette_enabled")) fo_gfx_vignette();
     }
     fo_gfx_view(0, 0, (float)G.width, (float)G.height);
     if (G.dialog == FO_DIALOG_TEAM) fo_team_draw(G.map.world);
@@ -649,9 +699,13 @@ static void screen_action(FOScreenResult r) {
         break;
     case FO_SCREEN_SWITCH_TEAM: G.dialog = FO_DIALOG_TEAM; break;
     case FO_SCREEN_QUIT:
-        // The original goes to the main menu. FortOS has no main menu
-        // before 0.8, so it goes to the single player screen.
-        open_single();
+    case FO_SCREEN_BACK: open_screen(FO_VIEW_MAIN); break;
+    case FO_SCREEN_SINGLE: open_screen(FO_VIEW_SINGLE); break;
+    case FO_SCREEN_CREDITS: open_screen(FO_VIEW_CREDITS); break;
+    case FO_SCREEN_SETTINGS: open_screen(FO_VIEW_SETTINGS); break;
+    case FO_SCREEN_SETTING:
+        fo_prefs_set_int(&G.prefs, kSettingPrefs[r.setting], r.value);
+        if (!fo_prefs_save(&G.prefs)) fprintf(stderr, "prefs: cannot write %s\n", G.prefs.path);
         break;
     default: break;
     }
@@ -659,8 +713,12 @@ static void screen_action(FOScreenResult r) {
 
 void fo_game_touch(int id, int phase, float x, float y) {
     float sy = G.height - y;
-    if (G.screen == FO_VIEW_SINGLE) {
-        if (phase == FO_TOUCH_BEGAN) screen_action(fo_single_tap(x, sy));
+    if (G.screen != FO_VIEW_MATCH) {
+        if (phase != FO_TOUCH_BEGAN) return;
+        if (G.screen == FO_VIEW_MAIN) screen_action(fo_main_tap(x, sy));
+        else if (G.screen == FO_VIEW_CREDITS) screen_action(fo_credits_tap(x, sy));
+        else if (G.screen == FO_VIEW_SETTINGS) screen_action(fo_settings_tap(x, sy));
+        else if (G.screen == FO_VIEW_SINGLE) screen_action(fo_single_tap(x, sy));
         return;
     }
     if (G.dialog != FO_DIALOG_NONE) {
@@ -692,6 +750,9 @@ void fo_game_debug(const char *command) {
         start_map(G.mapLoaded ? G.map.id : FO_MAP_GANTOWN, 1);
     }
     if (strncmp(command, "single", 6) == 0) open_single();
+    if (strncmp(command, "mainmenu", 8) == 0) open_screen(FO_VIEW_MAIN);
+    if (strncmp(command, "credits", 7) == 0) open_screen(FO_VIEW_CREDITS);
+    if (strncmp(command, "settings", 8) == 0) open_screen(FO_VIEW_SETTINGS);
     // The commands below need a match.
     if (!G.mapLoaded) return;
     FOPlayer *p = local_player();
