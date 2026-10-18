@@ -16,6 +16,7 @@
 #include "fo_screens.h"
 #include "fo_sound.h"
 #include "fo_effects.h"
+#include "fo_ambient.h"
 #include "fo_audio.h"
 #include "fo_look.h"
 #include "fo_maps.h"
@@ -146,6 +147,7 @@ static int start_map(FOMapId id, int play) {
     fo_camera_init(&G.camera, G.width, G.height, x, y);
     fo_hud_map(fo_map_name(id));
     fo_effects_reset(id, G.time);
+    fo_ambient_reset(G.map.world);
     G.dialog = FO_DIALOG_TEAM;
     if (play) {
         fo_world_change_team(G.map.world, p, G.localTeam);
@@ -212,6 +214,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
     fo_controls_layout(&G.controls, width, height);
     fo_look_init(&G.sprites);
     fo_effects_init(&G.sprites);
+    fo_ambient_init(&G.sprites);
     G.scopeMask = fo_assets_texture("textures/sniper_aim_alpha_mask.png");
     FOHudFonts fonts = {&G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21};
     fo_hud_init(&G.sprites, &fonts, G.texts, width, height);
@@ -357,6 +360,7 @@ static void draw_world(void) {
     fo_map_draw_back(&G.map, &G.sprites, G.camera.shownX, left, bottom, right, top);
     FOWorld *world = G.map.world;
     float now = world->now / 1000.0f;
+    fo_ambient_draw(G.time);
     fo_look_bomb(world);
     fo_effects_draw_behind(world, G.time);
     // The layers of wz.java: the dead bodies, the projectiles, the players.
@@ -527,6 +531,8 @@ void fo_game_frame(double dt) {
     for (int i = 0; i < FO_MAX_PLAYERS; i++) G.looks[i].stateTime += (float)dt;
     fo_hud_events(G.map.world, FO_LOCAL_ID, (float)dt);
     fo_effects_update(G.map.world, G.time);
+    fo_ambient_update(G.map.world, G.camera.shownX - G.camera.viewW / 2, G.camera.shownY - G.camera.viewH / 2,
+                      G.camera.viewW, G.camera.viewH, (float)dt, G.time);
     fo_map_update(&G.map, (float)dt);
     if (p && p->alive) {
         float x, y;
