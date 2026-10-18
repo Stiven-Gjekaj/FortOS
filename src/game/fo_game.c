@@ -26,7 +26,7 @@ static struct {
     int width, height;
     float time;
     FOAtlasTextures sprites;
-    FOFont pixel4, pixel6, pixel12;
+    FOFont pixel4, pixel6, pixel12, pixel21;
     FOText *texts;
     FOMap map;
     int mapLoaded;
@@ -47,6 +47,8 @@ static struct {
     float fpsTime;
     int fpsFrames;
     float fps;
+    float frameDt;            // The time of the last frame, for the fades.
+    int debugScore;
 } G;
 
 static void fail(const char *message) {
@@ -75,11 +77,15 @@ static int start_map(FOMapId id) {
     double start = wall_seconds();
     if (!fo_map_load(&G.map, id, (unsigned int)(start * 1000))) return 0;
     G.mapLoaded = 1;
+    G.map.world->localId = FO_LOCAL_ID;
     FOPlayer *p = fo_world_add_player(G.map.world, FO_LOCAL_ID, G.localTeam);
+    // SingleplayerClient (xa.java:35): the local player is "you".
+    if (G.texts) snprintf(p->name, sizeof(p->name), "%s", fo_text_get(G.texts, "you"));
     fo_world_spawn(G.map.world, p, G.localClass);
     float x, y;
     fo_player_position(p, &x, &y);
     fo_camera_init(&G.camera, G.width, G.height, x, y);
+    fo_hud_map(fo_map_name(id));
     fprintf(stderr, "map %s: %.3f s, textures %.1f MB\n", fo_map_name(id), wall_seconds() - start,
             fo_assets_texture_bytes() / 1048576.0);
     return 1;
@@ -103,21 +109,21 @@ int fo_game_start(const char *apk_path, int width, int height) {
         fail("OpenGL ES 2.0 does not start.");
         return 0;
     }
+    char *texts = (char *)fo_assets_read("texts/gangforttexts.properties", NULL);
+    G.texts = texts ? fo_text_parse(texts) : NULL;
+    free(texts);
     if (!fo_assets_atlas(&G.sprites, "textures/sprites.atlas") || !fo_font_load(&G.pixel4, "fonts/pixel4.fnt") ||
         !fo_font_load(&G.pixel6, "fonts/pixel6.fnt") ||
-        !fo_font_load(&G.pixel12, "fonts/pixel12.fnt") || !start_map(FO_MAP_GANTOWN)) {
+        !fo_font_load(&G.pixel12, "fonts/pixel12.fnt") || !fo_font_load(&G.pixel21, "fonts/pixel21.fnt") ||
+        !start_map(FO_MAP_GANTOWN)) {
         fail("The APK does not hold the files of GANGFORT 2.1.");
         return 0;
     }
     fo_controls_layout(&G.controls, width, height);
     fo_look_init(&G.sprites);
     G.scopeMask = fo_assets_texture("textures/sniper_aim_alpha_mask.png");
-    char *texts = (char *)fo_assets_read("texts/gangforttexts.properties", NULL);
-    G.texts = texts ? fo_text_parse(texts) : NULL;
-    free(texts);
-    fo_hud_init(&G.sprites, &G.pixel4, G.texts, width, height);
-    FOPlayer *you = local_player();
-    if (you) snprintf(you->name, sizeof(you->name), "%s", fo_text_get(G.texts, "you"));
+    FOHudFonts fonts = {&G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21};
+    fo_hud_init(&G.sprites, &fonts, G.texts, width, height);
     fprintf(stderr, "start: %.3f s\n", wall_seconds() - start);
     return 1;
 }
@@ -276,6 +282,7 @@ static void draw_world(void) {
         if (p->used && p->alive) fo_look_player(world, p, &G.looks[i], now, world->accumulator, viewer);
     }
     fo_look_sentries(world, now);
+    fo_hud_bomb_hint(world, (float)G.frameDt);
     fo_map_draw_front(&G.map, &G.sprites, left, bottom, right, top);
     draw_scope(viewer);
 }
@@ -284,6 +291,8 @@ static void draw_hud(void) {
     fo_gfx_view(0, 0, (float)G.width, (float)G.height);
     float u = G.width / 281.0f;
     FOPlayer *p = local_player();
+    fo_hud_view(G.camera.shownX - G.camera.viewW / 2, G.camera.shownY - G.camera.viewH / 2, G.camera.viewW,
+                G.camera.viewH);
     fo_hud_draw(G.map.world, p, 0);
     if (p && p->alive && p->cls == FO_CLASS_SNIPER && p->weapon.angle != 0) {
         const FOLook *look = &G.looks[p - G.map.world->players];
@@ -294,7 +303,12 @@ static void draw_hud(void) {
         fo_hud_sniper(sx, sy, a, p->sniperCharge);
     }
     update_buttons(p, G.icons);
-    fo_controls_draw(&G.controls, &G.sprites, p ? p->team : FO_TEAM_BLU, p && p->cls == FO_CLASS_SNIPER, G.icons);
+    // GameScreen.e() (aeb.java:636-660): the controls hide while the local
+    // player is dead, at the end of a round, and while the bomb is down.
+    if (p && p->alive && !fo_mode_over(G.map.world) && !fo_mode_bomb_down(G.map.world)) {
+        fo_controls_draw(&G.controls, &G.sprites, p ? p->team : FO_TEAM_BLU, p && p->cls == FO_CLASS_SNIPER, G.icons);
+    }
+    fo_hud_round_over(G.map.world, p, G.frameDt);
     char text[128];
     snprintf(text, sizeof(text), "%.0f fps", G.fps);
     fo_font_draw(&G.pixel6, text, G.width - 3 * u, G.height - 3 * u, u * 0.5f, fo_rgb(0xffb866), FO_ALIGN_RIGHT);
@@ -303,6 +317,7 @@ static void draw_hud(void) {
 void fo_game_frame(double dt) {
     fo_debug_poll(dt);
     G.time += (float)dt;
+    G.frameDt = (float)dt;
     G.fpsFrames++;
     G.fpsTime += (float)dt;
     if (G.fpsTime >= 1) {
