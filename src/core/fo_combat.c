@@ -248,7 +248,9 @@ static void bullet_hit(FOWorld *world, FOBullet *b, FOObj *other, float px, floa
     }
     if (other->kind == FO_OBJ_GROUND || other->kind == FO_OBJ_DOOR) {
         bullet_stop(world, b);
-        if (def->wallEffect && def->kind != FO_SHOT_ROCKET) fo_world_event(world, FO_EVENT_EFFECT, "bullet_hit_wall", px, py);
+        // Weapon.a(xg, ...) (alz.java:154-158): the rocket keeps B, so it also
+        // makes the hit on the wall next to its explosion.
+        if (def->wallEffect) fo_world_event(world, FO_EVENT_EFFECT, "bullet_hit_wall", px, py);
     } else if (other->kind == FO_OBJ_PLAYER) {
         FOPlayer *target = (FOPlayer *)other;
         if (target->team != b->team) {

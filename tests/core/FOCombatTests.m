@@ -3,6 +3,7 @@
 
 #import "FOTest.h"
 #include <math.h>
+#include <string.h>
 #include "fo_world.h"
 #include "fo_world_private.h"
 
@@ -305,5 +306,22 @@ FO_TEST(testCombatPickupFadesAtTheSpawnOfItsOwner) {
     FO_EXPECT(e->pickup.active);
     run(world, 40);
     FO_EXPECT(!e->pickup.active);
+    fo_world_free(world);
+}
+
+FO_TEST(testCombatRocketMakesTheWallHit) {
+    // alz.java:46 and 154-158: the rocket keeps B at true.
+    FOWorld *world = fo_world_new(kFlat, 3);
+    FOPlayer *p = standing(world, 1, FO_TEAM_BLU, FO_CLASS_SOLDIER, 50);
+    fo_player_set_aim(p, 1);
+    FO_EXPECT(fo_player_shoot(world, p, 0));
+    int hits = 0;
+    for (int f = 0; f < 120 && !hits; f++) {
+        fo_world_update(world, 1 / 60.0f);
+        for (int i = 0; i < world->event_count; i++) {
+            if (world->events[i].kind == FO_EVENT_EFFECT && strcmp(world->events[i].name, "bullet_hit_wall") == 0) hits++;
+        }
+    }
+    FO_EQUAL_INT(hits, 1);
     fo_world_free(world);
 }
