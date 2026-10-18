@@ -45,6 +45,12 @@ static const FOClassData kData[10] = {
 static const FOAtlasTextures *gSprites;
 static FOClassLook gLooks[10][3];
 static FOSprite gBurning[7];
+static FOSprite gBackstab[3][15];     // By team.
+static FOSprite gPrepareDisguise[3][5];
+static FOSprite gCigarette[5];
+static FOSprite gDisguiseSmoke[12];
+static FOSprite gSentryLegs, gTurret[3], gAssemble[3][8];
+static FOSprite gBeam[3], gBarEmpty, gBarFull;
 static FOSprite gWeapons[64][3];        // By item id and team.
 static FOSprite gFlashes[64];
 static FOSprite gBullets[64][6];
@@ -112,6 +118,51 @@ void fo_look_init(const FOAtlasTextures *sprites) {
         snprintf(name, sizeof(name), "player_burning%d", i + 1);
         gBurning[i] = named(name);
     }
+    for (int t = 1; t <= 2; t++) {
+        const char *team = t == 2 ? "red" : "blu";
+        char name[48];
+        // The backstab: 4 frames of the start, 7 of the stab, and the 4
+        // first frames back (wn.java:68-69).
+        static const int prepare[4] = {1, 3, 4, 5};
+        int n = 0;
+        for (int i = 0; i < 4; i++) {
+            snprintf(name, sizeof(name), "%s_spy_prepare_backstab%d", team, prepare[i]);
+            gBackstab[t][n++] = named(name);
+        }
+        for (int i = 1; i <= 7; i++) {
+            snprintf(name, sizeof(name), "%s_spy_backstab%d", team, i);
+            gBackstab[t][n++] = named(name);
+        }
+        for (int i = 3; i >= 0; i--) {
+            snprintf(name, sizeof(name), "%s_spy_prepare_backstab%d", team, prepare[i]);
+            gBackstab[t][n++] = named(name);
+        }
+        for (int i = 0; i < 5; i++) {
+            snprintf(name, sizeof(name), "%s_spy_prepare_disguise%d", team, i + 1);
+            gPrepareDisguise[t][i] = named(name);
+        }
+        snprintf(name, sizeof(name), "%s_sentry_turret", team);
+        gTurret[t] = named(name);
+        for (int i = 0; i < 8; i++) {
+            snprintf(name, sizeof(name), "%s_sentry_assemble%d", team, i + 1);
+            gAssemble[t][i] = named(name);
+        }
+    }
+    for (int i = 0; i < 5; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "spy_cigarette_smoke%d", i + 1);
+        gCigarette[i] = named(name);
+    }
+    for (int i = 0; i < 12; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "spy_disguise_smoke%d", i + 1);
+        gDisguiseSmoke[i] = named(name);
+    }
+    gSentryLegs = named("sentry_legs");
+    gBeam[1] = named("medic_healingTextureBlu");
+    gBeam[2] = named("medic_healingTextureRed");
+    gBarEmpty = named("redbar_empty");
+    gBarFull = named("redbar_full");
     static const char *sawn[] = {"bullet_sawngun1", "bullet_sawngun2", "bullet_sawngun3"};
     static const char *rocket[] = {"bullet_rocket_launcher"};
     static const char *flame[] = {"bullet_flamethrower1", "bullet_flamethrower2", "bullet_flamethrower3",
@@ -181,22 +232,22 @@ static float arm_offset(const FOWeapon *w, long long nowMs) {
     }
 }
 
-void fo_look_player(const FOWorld *world, const FOPlayer *p, FOLook *look, float now, float t) {
-    if (p->cls < 1 || p->cls > 9 || (p->team != 1 && p->team != 2)) return;
-    const FOClassLook *l = &gLooks[p->cls][p->team];
-    const FOClassData *d = &kData[p->cls];
-    const FOArm *arm = fo_class_arm(p->cls);
+// PlayerRenderData.a(...) (ada.java:665-732): the parts of one player,
+// as the class cls of the team. f5 is the time of the start of a disguise,
+// or -1.
+static void draw_main(const FOWorld *world, const FOPlayer *p, FOLook *look, float now, float X, float Y, int cls,
+                      int team, const FOWeapon *w, FOColor tint, float f5) {
+    if (cls < 1 || cls > 9 || (team != 1 && team != 2)) return;
+    const FOClassLook *l = &gLooks[cls][team];
+    const FOClassData *d = &kData[cls];
+    const FOArm *arm = fo_class_arm(cls);
     long long nowMs = world->now;
-    float bx, by, vx, vy;
-    fo_player_position(p, &bx, &by);
+    float vx, vy;
     fo_player_velocity(p, &vx, &vy);
-    // The render place: the body moved by the part of a step that waits.
-    float X = bx + vx * t, Y = by + vy * t + 0.5f * -15.0f * t * t;
     float Y0 = Y - p->obj.h / 2;
     int s = p->facingRight ? 1 : -1;
     int grounded = fo_player_grounded(p);
     float landed = now - p->landTime / 1000.0f;
-    FOColor tint = FO_WHITE;
 
     // 3.3: the legs.
     const FOSprite *legs;
@@ -214,8 +265,7 @@ void fo_look_player(const FOWorld *world, const FOPlayer *p, FOLook *look, float
             legs = &l->middle;
         }
     } else {
-        float speed = fo_class_speed(p->cls);
-        const FOWeapon *w = &p->weapon;
+        float speed = fo_class_speed(cls);
         if (w->def && (float)(nowMs - w->lastShot) < w->def->window * 2.0f) speed *= w->def->afterShot;
         float dur = fabsf(speed * 0.01f - 0.1f) + 0.1f;
         int reversed = (vx > 0 && !p->facingRight) || (vx < 0 && p->facingRight);
@@ -227,7 +277,7 @@ void fo_look_player(const FOWorld *world, const FOPlayer *p, FOLook *look, float
     }
     // bob() and idl().
     int bob;
-    if (p->cls != FO_CLASS_SPY && p->cls != FO_CLASS_PYRO) {
+    if (cls != FO_CLASS_SPY && cls != FO_CLASS_PYRO) {
         bob = look->S == 0 || look->S == 3;
     } else {
         bob = (look->S == 0 || look->S == 2 || look->S == 3 || look->S == 5) ? -1 : 0;
@@ -246,8 +296,18 @@ void fo_look_player(const FOWorld *world, const FOPlayer *p, FOLook *look, float
     float fw = l->body[0].w * Z, fh = l->body[0].h * Z;
     // 1. Legs.
     if (legs->w) fo_gfx_draw(legs, X - lw / 2 + s * d->legsX * Z, Y0 + bobM, lw, lh, lw / 2, lh / 2, 0, s < 0, tint);
-    // 2. Body.
-    if (body->w) fo_gfx_draw(body, X - fw / 2, Y0 + lh + bobM + idl, fw, fh, fw / 2, fh / 2, 0, s < 0, tint);
+    // 2. Body, or the frames of the start of a disguise of the spy.
+    if (f5 < 0) {
+        if (body->w) fo_gfx_draw(body, X - fw / 2, Y0 + lh + bobM + idl, fw, fh, fw / 2, fh / 2, 0, s < 0, tint);
+    } else {
+        int i = (int)floorf(f5 / 0.1f);
+        if (i > 4) i = 4;
+        const FOSprite *m = &gPrepareDisguise[team][i];
+        if (m->w) {
+            float mw = m->w * Z, mh = m->h * Z;
+            fo_gfx_draw(m, X - mw / 2 + s * 1 * Z, Y0 + lh + bobM - 6 * Z, mw, mh, mw / 2, mh / 2, 0, s < 0, tint);
+        }
+    }
     // 3. Head.
     float hw = l->head.w * Z, hh = l->head.h * Z;
     if (l->head.w) {
@@ -255,19 +315,41 @@ void fo_look_player(const FOWorld *world, const FOPlayer *p, FOLook *look, float
                     s < 0, tint);
     }
     // 4. The top of the body of the spy.
-    if (p->cls == FO_CLASS_SPY && l->bodytop.w) {
+    if (cls == FO_CLASS_SPY && l->bodytop.w) {
         float w = l->bodytop.w * Z, h = l->bodytop.h * Z;
         fo_gfx_draw(&l->bodytop, X - 0.25f + s * 1 * Z, Y0 + 12 * Z + bobM + idl + xL, w, h, w / 2, h / 2, 0, s < 0,
                     tint);
     }
+    // 6. The smoke of the cigarette of the spy: 0.5 s, each 2.5 s.
+    if (cls == FO_CLASS_SPY && f5 < 0) {
+        float ts = now - look->smokeTime;
+        if (ts < 0.5f) {
+            const FOSprite *c = &gCigarette[(int)floorf(ts / 0.1f) % 5];
+            if (c->w) {
+                float cw = c->w * Z, ch = c->h * Z;
+                fo_gfx_draw(c, X - 0.15f + s * 6 * Z, Y0 + 15 * Z + bobM + idl + xL, cw, ch, cw / 2, ch / 2, 0, s < 0,
+                            FO_WHITE);
+            }
+        } else if (ts >= 2.5f) {
+            look->smokeTime = now;
+        }
+    }
+    // 7. The fire.
+    if (p->burning) {
+        const FOSprite *f = &gBurning[(int)floorf(look->stateTime / 0.1f) % 7];
+        if (f->w) {
+            float bw = f->w * Z, bh = f->h * Z;
+            fo_gfx_draw(f, X - 0.4f + s * d->burnX * Z, Y0 + d->burnY * Z + bobM + idl, bw, bh, bw / 2, bh / 2, 0, s < 0,
+                        FO_WHITE);
+        }
+    }
     // 8. The weapon (4.1).
-    const FOWeapon *w = &p->weapon;
     float A = w->angle;
     float ax = s > 0 ? (arm->jx + arm->h) : (fw - arm->jx - arm->h);
     float Px = X - fw / 2 + ax;
     float Py = Y0 + arm->jy + arm->ky + idl + bobM + xL;
     if (w->def && w->def->item < 64) {
-        const FOSprite *ws = &gWeapons[w->def->item][p->team];
+        const FOSprite *ws = &gWeapons[w->def->item][team];
         float hx = w->def->hx, hy = w->def->hy;
         if (w->def->item == FO_ITEM_MINIGUN || w->def->item == FO_ITEM_UDDERGUN) {
             float k = (float)(nowMs - w->lastShot) / w->def->interval;
@@ -309,6 +391,149 @@ void fo_look_player(const FOWorld *world, const FOPlayer *p, FOLook *look, float
         // With scale (s, 1), the pivot of a mirrored sprite is at w - kx.
         float ox = s > 0 ? kx : aw - kx;
         fo_gfx_draw(&l->arm, Px - ox, Py - ky, aw, ah, ox, ky, armRot * 0.017453292f, s < 0, tint);
+    }
+}
+
+// The alpha of the cloak (xn.java:419-449): the enemies see nothing and
+// the teammates see 0.3, with a fade of 0.3 s.
+static float cloak_alpha(const FOWorld *world, const FOPlayer *p, const FOPlayer *viewer) {
+    float f = viewer && viewer->team == p->team ? 0.3f : 0.0f;
+    float k = (world->now - p->cloakTime) / 300.0f;
+    k = k < 0 ? 0 : k > 1 ? 1 : k;
+    if (p->cls == FO_CLASS_SPY && p->cloaked) return 1 + (f - 1) * k;
+    if (p->cloakTime == 0) return 1;
+    return f + (1 - f) * k;
+}
+
+// The backstab of the spy (ada.java:854-888): one frame holds the whole body.
+static void draw_backstab(const FOWorld *world, const FOPlayer *p, FOLook *look, float now, FOColor tint) {
+    float bx, by;
+    fo_player_position(p, &bx, &by);
+    int s = p->facingRight ? 1 : -1;
+    int idx = (int)floorf((now - p->backstabTime / 1000.0f) / (1.1f / 15));
+    if (idx > 14) idx = 14;
+    if (idx < 0) idx = 0;
+    const FOSprite *fr = &gBackstab[p->team][idx];
+    if (fr->w) {
+        float w = fr->w * Z, h = fr->h * Z;
+        float dx = s > 0 ? -5 * Z : -8 * Z;
+        fo_gfx_draw(fr, bx - p->obj.w / 2 + dx, by - p->obj.h / 2, w, h, w / 2, h / 2, 0, s < 0, tint);
+    }
+    look->S = -1;
+    look->D = 0;
+    (void)world;
+}
+
+void fo_look_player(const FOWorld *world, const FOPlayer *p, FOLook *look, float now, float t,
+                    const FOPlayer *viewer) {
+    if (p->cls < 1 || p->cls > 9 || (p->team != 1 && p->team != 2)) return;
+    float bx, by, vx, vy;
+    fo_player_position(p, &bx, &by);
+    fo_player_velocity(p, &vx, &vy);
+    // The render place: the body moved by the part of a step that waits.
+    float X = bx + vx * t, Y = by + vy * t + 0.5f * -15.0f * t * t;
+    FOColor tint = FO_WHITE;
+    // A player in uber is red or blue (xn.java:458-462).
+    if (fo_player_protected(world, p)) tint = p->team == FO_TEAM_RED ? fo_rgb(0xff0000) : fo_rgb(0x0000ff);
+    tint.a = cloak_alpha(world, p, viewer);
+    if (tint.a <= 0) return;
+    float since = p->disguise.active ? (world->now - p->disguise.start) / 1000.0f : 0;
+    if (p->cls == FO_CLASS_SPY && p->backstab && now - p->backstabTime / 1000.0f < 1.1f) {
+        draw_backstab(world, p, look, now, tint);
+    } else if (p->cls == FO_CLASS_SPY && p->disguise.active && since > 1.0f) {
+        if (viewer && viewer->team == p->team && viewer->id != p->id) {
+            draw_main(world, p, look, now, X, Y, p->cls, p->team, &p->weapon, tint, -1);
+        } else {
+            // The enemies see the target: its class, its team, and its weapon.
+            const FOPlayer *target = fo_world_player((FOWorld *)world, p->disguise.target);
+            FOWeapon w = p->weapon;
+            w.def = target && target->cls == p->disguise.cls ? target->weapon.def : fo_weapon_default(p->disguise.cls);
+            draw_main(world, p, look, now, X, Y, p->disguise.cls, p->disguise.team, &w, tint, -1);
+        }
+    } else {
+        float f5 = p->disguise.active && since < 0.5f ? since : -1;
+        draw_main(world, p, look, now, X, Y, p->cls, p->team, &p->weapon, tint, f5);
+    }
+    // The smoke of a disguise, from 0.5 s to 1.4 s.
+    if (p->disguise.active && since > 0.5f && since - 0.5f < 0.9f) {
+        const FOSprite *sm = &gDisguiseSmoke[(int)floorf((since - 0.5f) / (0.9f / 12)) % 12];
+        if (sm->w) {
+            float w = sm->w * Z, h = sm->h * Z;
+            fo_gfx_draw(sm, bx - w / 2, by - 0.95f, w, h, w / 2, h / 2, 0, 0, tint);
+        }
+    }
+}
+
+// The beam of each medic to its target (xn.java:450-457).
+void fo_look_beams(const FOWorld *world) {
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        const FOPlayer *m = &world->players[i];
+        if (!m->used || !m->alive || m->cls != FO_CLASS_MEDIC || !m->healTarget) continue;
+        const FOPlayer *t = fo_world_player((FOWorld *)world, m->healTarget);
+        if (!t || fo_player_waiting(t) || !t->alive) continue;
+        float mx, my, tx, ty;
+        fo_player_position(m, &mx, &my);
+        fo_player_position(t, &tx, &ty);
+        float cx = (mx + tx) / 2, cy = (my + ty) / 2;
+        float len = sqrtf((tx - mx) * (tx - mx) + (ty - my) * (ty - my));
+        const FOSprite *b = &gBeam[m->team == FO_TEAM_RED ? 2 : 1];
+        if (b->w) fo_gfx_draw(b, cx - len / 2, cy - 0.125f, len, 0.25f, len / 2, 0.125f, atan2f(ty - my, tx - mx), 0, FO_WHITE);
+    }
+}
+
+// A local medic sees the health of each teammate (xn.java:493-498).
+void fo_look_health_bars(const FOWorld *world, const FOPlayer *viewer) {
+    if (!viewer || viewer->cls != FO_CLASS_MEDIC || !gBarEmpty.w) return;
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        const FOPlayer *p = &world->players[i];
+        if (!p->used || !p->alive || p->id == viewer->id || p->team != viewer->team) continue;
+        float x, y;
+        fo_player_position(p, &x, &y);
+        // ak: the height of the name, about 0.35 m.
+        float by = y + p->obj.h / 2 + 0.35f - 0.3f;
+        fo_gfx_draw(&gBarEmpty, x - 0.75f, by, 1.5f, 0.2f, 0, 0, 0, 0, FO_WHITE);
+        fo_gfx_draw(&gBarFull, x - 0.75f, by, 1.5f * p->health / fo_class_health(p->cls), 0.2f, 0, 0, 0, 0, FO_WHITE);
+    }
+}
+
+// SentryGun.a(alh) (xu.java): the legs and the turret, or the build.
+void fo_look_sentries(const FOWorld *world, float now) {
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        const FOSentry *se = &world->players[i].sentry;
+        if (!se->active || (se->team != 1 && se->team != 2)) continue;
+        float x, y;
+        fo_phys_body_position(se->obj.body, &x, &y);
+        int s = se->facingRight ? 1 : -1;
+        if (fo_sentry_is_ready(world, se)) {
+            const FOSprite *legs = &gSentryLegs;
+            if (legs->w) {
+                float lw = legs->w * Z, lh = legs->h * Z;
+                fo_gfx_draw(legs, x - lw / 2, y - lh / 2 - 0.2f, lw, lh, lw / 2, lh / 2, 0, s < 0, FO_WHITE);
+            }
+            // The turret: 1.7 x 1.2 m from its corner, origin (0.5, 0.6), flipped
+            // in y when it points to the left.
+            const FOSprite *tu = &gTurret[se->team];
+            float deg = fmodf(fmodf(se->aim * 57.295776f, 360) + 360, 360);
+            int flipY = deg > 90 && deg < 270;
+            float tx = (x - 1.7f / 2) + 0.4f, ty = (y - 1.2f / 2) + 0.6f - 0.2f;
+            if (tu->w) {
+                if (!flipY) {
+                    fo_gfx_draw(tu, tx, ty, 1.7f, 1.2f, 0.5f, 0.6f, se->aim, 0, FO_WHITE);
+                } else {
+                    // A flip of y is a flip of x and a half turn.
+                    fo_gfx_draw(tu, tx, ty, 1.7f, 1.2f, 0.5f, 0.6f, se->aim + 3.1415927f, 1, FO_WHITE);
+                }
+            }
+        } else {
+            int frame = se->built == 0 ? 0 : (int)floorf((now - se->built / 1000.0f) / (0.8f / 8));
+            if (frame > 7) frame = 7;
+            const FOSprite *f = &gAssemble[se->team][frame];
+            if (f->w) {
+                float w = f->w * Z, h = f->h * Z;
+                float ex = se->facingRight ? 0.15f : -0.15f;
+                fo_gfx_draw(f, x - w / 2 + ex, 0.1f + y - h / 2, w, h, w / 2, h / 2, 0, s < 0, FO_WHITE);
+            }
+        }
     }
 }
 

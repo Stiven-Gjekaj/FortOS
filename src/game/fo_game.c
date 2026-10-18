@@ -243,10 +243,14 @@ static void draw_world(void) {
     }
     fo_look_bullets(world, now);
     fo_look_pickups(world);
+    FOPlayer *viewer = local_player();
+    fo_look_beams(world);
+    fo_look_health_bars(world, viewer);
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
         const FOPlayer *p = &world->players[i];
-        if (p->used && p->alive) fo_look_player(world, p, &G.looks[i], now, world->accumulator);
+        if (p->used && p->alive) fo_look_player(world, p, &G.looks[i], now, world->accumulator, viewer);
     }
+    fo_look_sentries(world, now);
     fo_map_draw_front(&G.map, &G.sprites, left, bottom, right, top);
 }
 
