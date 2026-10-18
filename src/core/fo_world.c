@@ -322,6 +322,9 @@ void fo_world_spawn(FOWorld *world, FOPlayer *p, int cls) {
     if (!def || def->cls != cls) def = fo_weapon_default(cls);
     p->hat = l ? l->hat : 0;
     p->hatPlaced = 0;
+    // Player.b(true) and Weapon.x() (xn.java:950-952, alz.java:374-378): the
+    // weapon that the player dropped starts to fade.
+    if (p->pickup.active && !p->pickup.fade) p->pickup.fade = world->now;
     hat_stop(world, p);
     p->weapon.def = def;
     p->weapon.ammo = def ? def->ammo : 0;

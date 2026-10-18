@@ -4,6 +4,7 @@
 #import "FOTest.h"
 #include <math.h>
 #include "fo_world.h"
+#include "fo_world_private.h"
 
 static const char *kFlat =
     "<map width=\"1\" height=\"1\" tilewidth=\"1000\" tileheight=\"300\">\n"
@@ -283,5 +284,26 @@ FO_TEST(testCombatColorfulFlamethrowerMakesTwoFlames) {
     FO_EXPECT(fo_player_shoot(world, p, 0));
     FO_EQUAL_INT(activeBullets(world), 2);
     FO_EQUAL_INT((int)(ammo - p->weapon.ammo), 1);
+    fo_world_free(world);
+}
+
+FO_TEST(testCombatPickupFadesAtTheSpawnOfItsOwner) {
+    // xn.java:950-952 and xx.java:47-66: at the spawn of the owner, the
+    // dropped weapon fades for 600 ms and gives no ammo.
+    FOWorld *world = fo_world_new(kFlat, 3);
+    FOPlayer *p = standing(world, 1, FO_TEAM_BLU, FO_CLASS_SOLDIER, 10);
+    FOPlayer *e = standing(world, 2, FO_TEAM_RED, FO_CLASS_HEAVY, 30);
+    fo_player_set_health(world, e, 0);
+    run(world, 60);
+    FO_EXPECT(e->pickup.active);
+    FO_EXPECT(e->pickup.fade == 0);
+    fo_world_spawn(world, e, FO_CLASS_HEAVY);
+    FO_EXPECT(e->pickup.fade != 0);
+    p->weapon.ammo = 4;
+    fo_combat_contact(world, &e->pickup.obj, &p->obj, 0, 0);
+    FO_EQUAL_INT((int)p->weapon.ammo, 4);
+    FO_EXPECT(e->pickup.active);
+    run(world, 40);
+    FO_EXPECT(!e->pickup.active);
     fo_world_free(world);
 }

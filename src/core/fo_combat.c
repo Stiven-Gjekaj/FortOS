@@ -279,7 +279,8 @@ static void bullet_hit(FOWorld *world, FOBullet *b, FOObj *other, float px, floa
 
 // WeaponPickup.a(xn) (xx.java): the touch of a player.
 static void pickup_touch(FOWorld *world, FOPickup *k, FOPlayer *p) {
-    if (!k->active || !p->weapon.def) return;
+    // A pickup that fades gives nothing (xx.java:66).
+    if (!k->active || k->fade || !p->weapon.def) return;
     p->weapon.ammo += p->weapon.def->ammo * 0.3f;
     if (p->weapon.ammo > p->weapon.def->ammo) p->weapon.ammo = p->weapon.def->ammo;
     k->active = 0;
@@ -335,12 +336,23 @@ void fo_combat_drop(FOWorld *world, FOPlayer *p) {
     k->active = 1;
     k->def = def;
     k->team = p->team;
+    k->fade = 0;
 }
 
 // Bullet.a(float) and Weapon.a(xg, float): the bullet turns to its velocity
 // and stops at the end of its life.
 void fo_combat_update(FOWorld *world, float dt) {
     (void)dt;
+    // WeaponPickup.a(alh) (xx.java:47-61): a pickup goes 600 ms after the
+    // start of its fade.
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        FOPickup *k = &world->players[i].pickup;
+        if (k->active && k->fade && world->now - k->fade >= 600) {
+            k->active = 0;
+            fo_phys_body_set_active(k->obj.body, 0);
+            fo_phys_body_set_transform(k->obj.body, -5, -5, 0);
+        }
+    }
     for (int i = 0; i < FO_MAX_BULLETS; i++) {
         FOBullet *b = &world->bullets[i];
         if (!b->active) continue;

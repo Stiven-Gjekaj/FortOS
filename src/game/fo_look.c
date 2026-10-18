@@ -766,7 +766,9 @@ void fo_look_pickups(const FOWorld *world) {
         float x, y;
         fo_phys_body_position(k->obj.body, &x, &y);
         float w = s->w * Z, h = s->h * Z;
-        fo_gfx_draw(s, x - w / 2, y - h / 2, w, h, w / 2, h / 2, fo_phys_body_angle(k->obj.body), 0, FO_WHITE);
+        float t = k->fade ? (float)(world->now - k->fade) / 600.0f : 0;
+        FOColor tint = {1, 1, 1, 1 - (t > 1 ? 1 : t)};
+        fo_gfx_draw(s, x - w / 2, y - h / 2, w, h, w / 2, h / 2, fo_phys_body_angle(k->obj.body), 0, tint);
     }
 }
 

@@ -159,6 +159,7 @@ typedef struct {
     int active;
     const FOWeaponDef *def;
     short team;            // The team of the owner, for the sprite.
+    long long fade;        // n: the start of the fade at the spawn of the owner, or 0.
 } FOPickup;
 
 // SentryGun (xu.java): the gun of a builder. It falls, lands, builds in
