@@ -533,6 +533,13 @@ void fo_game_debug(const char *command) {
     }
     if (strncmp(command, "players", 7) == 0 && (command[7] == 0 || command[7] == '\n')) {
         FOWorld *w = G.map.world;
+        const FOMode *md = &w->mode;
+        float bx = 0, by = 0;
+        if (md->kind == FO_MODE_BOMB) fo_phys_body_position(md->bomb.obj.body, &bx, &by);
+        fprintf(stderr, "mode %d over %d koth owner %d progress %.0f red %.0f blu %.0f bomb %.2f %.2f timer %.0f "
+                        "ctf %d-%d carriers %d %d\n",
+                md->kind, fo_mode_over(w), md->owner, md->progress, md->redTimer, md->bluTimer, bx, by, md->bombTimer,
+                md->redScore, md->bluScore, md->flags[1].carrier, md->flags[2].carrier);
         for (int i = 0; i < FO_MAX_PLAYERS; i++) {
             const FOPlayer *q = &w->players[i];
             if (!q->used) continue;
