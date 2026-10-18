@@ -29,10 +29,9 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 ---
 
 > [!NOTE]
-> **Version 0.3.0 is out.** A player walks, jumps, aims, and shoots on the
-> three maps of single player with the touch sticks of GANGFORT, at 60
-> frames each second on the iPhone 4S. The other classes, the game modes,
-> and the bots come in the next versions. [TODO.md](TODO.md) lists them.
+> **Version 0.4.0 is out.** All 9 classes fight with their weapons and
+> abilities on the three maps of single player, at 60 frames each second
+> on the iPhone 4S. The game modes and the bots come in the next versions. [TODO.md](TODO.md) lists them.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes of each release.
 
 > [!IMPORTANT]
@@ -54,12 +53,12 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 </tr>
 <tr>
 <td width="50%" valign="top">
-<img src="assets/screenshots/map.png" alt="The gantown map: a wooden house with platforms in front of the sky">
-<p align="center"><i>The gantown map</i></p>
+<img src="assets/screenshots/sentry.png" alt="A blue builder beside its sentry, which shoots at a red heavy on gantown">
+<p align="center"><i>A sentry</i></p>
 </td>
 <td width="50%" valign="top">
-<img src="assets/screenshots/classes.png" alt="The nine classes of the blue team in a row in a dark tunnel">
-<p align="center"><i>The nine classes</i></p>
+<img src="assets/screenshots/scope.png" alt="The scope of the sniper rifle: the map is blurred, except a cone in front of the rifle, with the aim line and the power">
+<p align="center"><i>The scope of the sniper rifle</i></p>
 </td>
 </tr>
 <tr>
