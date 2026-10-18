@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0 (2026-10-18)
+
+- All 9 classes, with their weapons and abilities:
+  - the flamethrower and its fire, which burns 5 each second for 5 s,
+  - the grenades, which bounce and go off with the splash of GANGFORT,
+  - the sniper rifle, which charges while it aims and hits at once, with
+    the scope shader, the power, the aim line, and the camera that looks
+    ahead,
+  - the sentry of the builder, which builds, turns, and shoots,
+  - the heal, the uber, and the beam of the dealer,
+  - the cloak, the disguise, and the backstab of the agent.
+- The ability buttons of GANGFORT for each class.
+- The third bar of the HUD: the cloak, the steel, or the uber.
+- A shot shakes the camera, and so does a hit on the player.
+- Fix: a touch of the right stick aims, and a shot needs the knob out a
+  quarter of the stick, as in GANGFORT.
+
 ## 0.3.0 (2026-10-18)
 
 - The players are drawn from their parts as in GANGFORT: the legs with
