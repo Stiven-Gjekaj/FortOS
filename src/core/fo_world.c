@@ -288,6 +288,9 @@ void fo_world_spawn(FOWorld *world, FOPlayer *p, int cls) {
     fo_phys_body_set_transform(p->obj.body, x, y, 0);
     fo_phys_body_set_velocity(p->obj.body, 0, -5);
     fo_phys_body_set_awake(p->obj.body, 1);
+    // Player.c(boolean): the abilities reset. The sentry stays at a respawn
+    // in the same class (wt.java:165-176, ws.java:20-26).
+    fo_classes_reset(world, p, p->cls == cls);
     p->cls = cls;
     p->health = fo_class_health(cls);
     p->alive = 1;
@@ -299,7 +302,7 @@ void fo_world_spawn(FOWorld *world, FOPlayer *p, int cls) {
     p->weapon.ammo = def ? def->ammo : 0;
     p->weapon.angle = 0;
     p->weapon.lastShot = 0;
-    p->healer = 0;
+    p->sniperCharge = 0;
     fo_combat_reset(p);
 }
 
@@ -363,6 +366,7 @@ void fo_player_die(FOWorld *world, FOPlayer *p) {
     p->health = 0;
     fo_combat_kill(world, p);
     if (p->weapon.def) p->weapon.ammo = p->weapon.def->ammo;
+    fo_classes_death(world, p);
     // The original moves the body to (-5, -5), out of the map. FortOS also
     // turns the body off, so that it does not fall while the player waits.
     fo_phys_body_set_transform(p->obj.body, -5, -5, 0);
@@ -506,13 +510,20 @@ static void player_move(FOWorld *world, FOPlayer *p) {
         if (p->move == FO_MOVE_RIGHT) p->facingRight = 1;
         if (p->move == FO_MOVE_LEFT) p->facingRight = 0;
     }
+    // The spy stands still while it backstabs (xn.java:642-644).
+    if (p->cls == FO_CLASS_SPY && p->backstab) {
+        fo_player_velocity(p, &vx, &vy);
+        fo_phys_body_set_velocity(body, 0, vy);
+    }
 }
 
 // Player.r() (xn.java:686-699): the side that the player faces.
 static void update_facing(FOPlayer *p) {
     float vx, vy;
     fo_player_velocity(p, &vx, &vy);
-    if (p->weapon.def && p->weapon.angle != 0) {
+    if (p->backstab) {
+        p->facingRight = p->backstabFacing;
+    } else if (p->weapon.def && p->weapon.angle != 0) {
         p->facingRight = p->weapon.angle <= 90.0f && p->weapon.angle >= -90.0f;
     } else if (vx > 1.0f) {
         p->facingRight = 1;
@@ -571,12 +582,12 @@ static void jump_sounds(FOWorld *world, FOPlayer *p) {
 
 // The fridge of the team (xn.java:384-392): full health and ammo. A rise
 // plays the sound of the fridge for the local player (aeb.java:415-424).
-static void fridge(FOWorld *world, FOPlayer *p) {
+static int fridge(FOWorld *world, FOPlayer *p) {
     const FORect *r = fo_tmx_area(&world->map, p->team == FO_TEAM_RED ? FO_AREA_FRIDGE_RED : FO_AREA_FRIDGE_BLU);
-    if (!r) return;
+    if (!r) return 0;
     float x, y;
     fo_player_position(p, &x, &y);
-    if (!fo_rect_contains(r, x, y)) return;
+    if (!fo_rect_contains(r, x, y)) return 0;
     float max = fo_class_health(p->cls);
     int rose = p->health < max || (p->weapon.def && p->weapon.ammo < p->weapon.def->ammo);
     fo_player_set_health(world, p, max);
@@ -584,6 +595,20 @@ static void fridge(FOWorld *world, FOPlayer *p) {
     if (rose) {
         fo_world_event(world, FO_EVENT_SOUND, "health_fridge", x, y);
         world->events[world->event_count - 1].a = p->id;
+    }
+    return 1;
+}
+
+// The cloak shows for a moment when the spy touches an enemy
+// (xn.java:426-437).
+static void cloak_touch(FOWorld *world, FOPlayer *p) {
+    if (!p->cloaked) return;
+    const FOTouchSet *sets[2] = {&p->left, &p->right};
+    for (int k = 0; k < 2; k++) {
+        for (int i = 0; i < sets[k]->count; i++) {
+            FOObj *o = sets[k]->objs[i];
+            if (o->kind == FO_OBJ_PLAYER && ((FOPlayer *)o)->team != p->team) p->cloakTime = world->now;
+        }
     }
 }
 
@@ -593,9 +618,14 @@ static void player_update(FOWorld *world, FOPlayer *p, float dt) {
     touch_purge(&p->left);
     touch_purge(&p->right);
     if (!p->alive) return;
-    fridge(world, p);
     player_move(world, p);
     update_facing(p);
+    fo_combat_weapon_update(p, dt);
+    fo_classes_update(world, p, dt);
+    int inFridge = p->alive && fridge(world, p);
+    fo_classes_after(world, p, dt, inFridge);
+    if (!p->alive) return;
+    cloak_touch(world, p);
     jump_sounds(world, p);
     // The vertical speed stays in [-20, 20] (xn.java:407).
     float vx, vy;
@@ -609,6 +639,8 @@ static void dispatch_begins(FOWorld *world) {
         FOObj *oa = fo_world_fixture_obj(world->begins[i].a), *ob = fo_world_fixture_obj(world->begins[i].b);
         if (!oa || !ob) continue;
         fo_combat_contact(world, oa, ob, world->begins[i].px, world->begins[i].py);
+        if (oa->kind == FO_OBJ_SENTRY && ob->kind == FO_OBJ_GROUND) fo_sentry_land(world, (FOSentry *)oa);
+        if (ob->kind == FO_OBJ_SENTRY && oa->kind == FO_OBJ_GROUND) fo_sentry_land(world, (FOSentry *)ob);
         if (oa->kind == FO_OBJ_CORPSE && ob->kind == FO_OBJ_GROUND) corpse_land(world, (FOCorpse *)oa, ob);
         if (ob->kind == FO_OBJ_CORPSE && oa->kind == FO_OBJ_GROUND) corpse_land(world, (FOCorpse *)ob, oa);
         if (oa->kind == FO_OBJ_PLAYER) player_contact_begin(world, (FOPlayer *)oa, world->begins[i].a, ob);
@@ -663,6 +695,7 @@ void fo_world_update(FOWorld *world, float dt) {
         if (world->players[i].used) player_update(world, &world->players[i], dt);
     }
     fo_combat_update(world, dt);
+    fo_classes_sentries(world, dt);
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
         FOCorpse *c = &world->players[i].corpse;
         if (c->active && world->now - c->start > 9000) {
@@ -673,4 +706,18 @@ void fo_world_update(FOWorld *world, float dt) {
     map_update(world);
     for (int i = 0; i < world->door_count; i++) door_update(world, &world->doors[i], dt);
     server_update(world);
+}
+
+// The game modes come in 0.5. Until then each player may cloak and
+// disguise, and no player holds an objective.
+int fo_world_mode_allows(const FOWorld *world, const FOPlayer *p) {
+    (void)world;
+    (void)p;
+    return 1;
+}
+
+int fo_world_holds_objective(const FOWorld *world, const FOPlayer *p) {
+    (void)world;
+    (void)p;
+    return 0;
 }

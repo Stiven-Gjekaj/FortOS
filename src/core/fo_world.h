@@ -139,6 +139,35 @@ typedef struct {
     short team;            // The team of the owner, for the sprite.
 } FOPickup;
 
+// SentryGun (xu.java): the gun of a builder. It falls, lands, builds in
+// 0.8 s, then turns to the nearest enemy in 10.5 m and shoots.
+typedef struct {
+    FOObj obj;
+    int active;
+    int owner;               // p: the id of the builder.
+    short team;              // A
+    int facingRight;         // u
+    float health;            // B
+    float aim;               // x: the angle of the turret in radians.
+    float want;              // s: the angle to the target.
+    int target;              // q: the id of the target, or 0.
+    int landed;              // F
+    long long built;         // D: the time that the build started, or 0.
+    long long lastShot;
+    long long alerted;       // z
+    FODamage damage[FO_DAMAGE_MAX];
+} FOSentry;
+
+// SpyDisguiseData (add.java): the player that a spy looks like.
+typedef struct {
+    int active;
+    long long start;         // i
+    int target;              // c
+    int cls;                 // d
+    short team;              // e
+    char name[24];           // f
+} FODisguise;
+
 typedef struct FOPlayer {
     FOObj obj;
     int used;
@@ -162,10 +191,29 @@ typedef struct FOPlayer {
     int score;               // P
     FODamage damage[FO_DAMAGE_MAX];
     int killer;              // q: the id of the last killer.
-    int healer;              // The id of the medic that heals the player, or 0.
     FOCorpse corpse;
     char name[24];           // The nickname (ai in xn.java).
     FOPickup pickup;
+    // The class abilities (fields of xn.java).
+    float steel;             // ah: the charge of the sentry of a builder, to 100.
+    FOSentry sentry;
+    float cloakEnergy;       // W
+    int cloaked;             // U
+    long long cloakTime;     // V: the time of the last change of the cloak.
+    int backstab;            // X
+    long long backstabTime;  // Y
+    int backstabHit;         // Z: the hit test of this backstab is done.
+    int backstabFacing;      // aa
+    FODisguise disguise;     // ac
+    int healTarget;          // ad: the id of the player that the medic heals.
+    int uber;                // af
+    float uberCharge;        // ae: to 20.
+    float healScore;         // ag
+    int burning;             // L
+    long long burnUntil;     // M
+    int burnAttacker;        // N: the player of the flame,
+    int burnItem;            //    and its weapon.
+    float sniperCharge;      // G of SniperRifle, to 100.
 } FOPlayer;
 
 // A projectile (Bullet, xg.java).
@@ -178,6 +226,8 @@ typedef struct {
     long long spawn;         // p
     int damage;              // n
     float angle;
+    int shape;               // The shape of the body: 0 bullet, 1 grenade, 2 apple.
+    int grounded;            // o of a grenade: it touched the ground.
 } FOBullet;
 
 #define FO_MAX_BULLETS 160
@@ -281,6 +331,27 @@ void fo_player_muzzle(const FOPlayer *player, float degrees, float *x, float *y)
 // Player.a(alz, float) (xn.java:1297-1302): damage from the weapon of the
 // player with the id attacker.
 void fo_player_damage(FOWorld *world, FOPlayer *target, int attacker, int item, float damage);
+
+// The actions of GameServer.a(xn, short, Object) (ws.java:124-210).
+// Action 17: the builder builds or destroys the sentry, the medic starts
+// the uber, the spy cloaks or uncloaks.
+void fo_player_ability(FOWorld *world, FOPlayer *player);
+// Action 18: the backstab of the spy.
+void fo_player_backstab(FOWorld *world, FOPlayer *player);
+// Action 22: the spy looks like a random enemy, not the player exclude.
+void fo_player_disguise(FOWorld *world, FOPlayer *player, int exclude);
+// Action 23: the spy looks like itself again.
+void fo_player_undisguise(FOWorld *world, FOPlayer *player);
+// Action 19: the medic heals the player with the id target, or stops at 0.
+void fo_player_heal(FOWorld *world, FOPlayer *player, int target);
+
+// The medic that heals the player in uber (N()), and the medic in uber
+// (L()): no damage.
+int fo_player_protected(const FOWorld *world, const FOPlayer *player);
+// The id of a medic that heals the player (P()), or 0.
+int fo_player_healer(const FOWorld *world, const FOPlayer *player);
+// The disguise is complete (add.b()): 1.4 s after the start.
+int fo_player_disguised(const FOWorld *world, const FOPlayer *player);
 
 // Adds an event of the frame.
 void fo_world_event(FOWorld *world, FOEventKind kind, const char *name, float x, float y);
