@@ -70,6 +70,23 @@
 - (void)start {
     _started = YES;
     NSString *apk = @"/var/mobile/Media/FortOS/GANGFORT.apk";
+    // The language of the interface of the device, and the country of its
+    // region settings.
+    NSString *language = [NSLocale preferredLanguages].count ? [NSLocale preferredLanguages][0] : @"en";
+    language = [[language componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"-_"]]
+        firstObject];
+    NSString *country = [[NSLocale currentLocale] objectForKey:NSLocaleCountryCode] ?: @"";
+#ifdef FO_DEBUG
+    // The debug build takes "language country" from /tmp/FortOS.lang, to test the texts.
+    NSString *test = [NSString stringWithContentsOfFile:@"/tmp/FortOS.lang" encoding:NSUTF8StringEncoding error:NULL];
+    NSArray *parts = [[test stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]
+        componentsSeparatedByString:@" "];
+    if (test.length) {
+        language = parts[0];
+        country = parts.count > 1 ? parts[1] : @"";
+    }
+#endif
+    fo_game_locale(language.UTF8String, country.UTF8String);
     if (!fo_game_start(apk.fileSystemRepresentation, _width, _height)) {
         [self showMessage:@(fo_game_error())];
         return;

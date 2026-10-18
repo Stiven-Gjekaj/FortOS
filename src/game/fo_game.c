@@ -42,6 +42,8 @@ static struct {
     int hatScores[FO_MAX_PLAYERS];
     FOWorld *menuWorld;       // An empty world: its clock moves the characters of the menus.  // s of GoldenHat: the score at the last golden drops.
     FOFont pixel4, pixel6, pixel12, pixel21;
+    FOFont cjk;               // res/fonts/japanese.fnt or korean.fnt.
+    char language[8], country[8];
     FOText *texts;
     FOMap map;
     int mapLoaded;
@@ -147,6 +149,33 @@ static void loadouts_save(void) {
 
 static const char *const kSettingPrefs[FO_SETTING_COUNT] = {"killcam_enabled", "theme_music_enabled",
                                                             "vignette_enabled"};
+
+void fo_game_locale(const char *language, const char *country) {
+    snprintf(G.language, sizeof(G.language), "%s", language ? language : "");
+    snprintf(G.country, sizeof(G.country), "%s", country ? country : "");
+}
+
+// I18NBundle.createBundle: the texts of the language and the country, then
+// of the language, then the default texts.
+static FOText *load_texts(void) {
+    char path[96];
+    char *text = (char *)fo_assets_read("texts/gangforttexts.properties", NULL);
+    FOText *texts = text ? fo_text_parse(text) : NULL;
+    free(text);
+    for (int k = 0; k < 2 && G.language[0]; k++) {
+        if (k == 0) snprintf(path, sizeof(path), "texts/gangforttexts_%s.properties", G.language);
+        else if (G.country[0]) snprintf(path, sizeof(path), "texts/gangforttexts_%s_%s.properties", G.language, G.country);
+        else break;
+        text = (char *)fo_assets_read(path, NULL);
+        FOText *more = text ? fo_text_parse(text) : NULL;
+        free(text);
+        if (!more) continue;
+        fo_text_set_parent(more, texts);
+        texts = more;
+        fprintf(stderr, "texts: %s\n", path);
+    }
+    return texts;
+}
 
 const char *fo_game_error(void) {
     return G.error;
@@ -270,15 +299,23 @@ int fo_game_start(const char *apk_path, int width, int height) {
         fo_sound_init(G.mixer);
         if (!fo_audio_start(G.mixer)) fprintf(stderr, "audio: no output\n");
     }
-    char *texts = (char *)fo_assets_read("texts/gangforttexts.properties", NULL);
-    G.texts = texts ? fo_text_parse(texts) : NULL;
-    free(texts);
+    G.texts = load_texts();
     if (!fo_assets_atlas(&G.sprites, "textures/sprites.atlas") || !fo_font_load(&G.pixel4, "fonts/pixel4.fnt") ||
         !fo_font_load(&G.pixel6, "fonts/pixel6.fnt") ||
         !fo_font_load(&G.pixel12, "fonts/pixel12.fnt") || !fo_font_load(&G.pixel21, "fonts/pixel21.fnt") ||
         !fo_assets_atlas(&G.ui, "textures/ui.atlas")) {
         fail("The APK does not hold the files of GANGFORT 2.1.");
         return 0;
+    }
+    // ResourceManager.c() and alf.a(...) (akz.java:49-56, alf.java:104-128):
+    // Japanese and Korean draw all the texts with one font, at 4, 6, 12, and
+    // 21 fortieths of its size.
+    const char *cjk = strcmp(G.language, "ja") == 0 ? "fonts/japanese.fnt" : strcmp(G.language, "ko") == 0 ? "fonts/korean.fnt" : NULL;
+    if (cjk && fo_font_load(&G.cjk, cjk)) {
+        G.pixel4 = fo_font_sized(&G.cjk, 4 / 40.0f);
+        G.pixel6 = fo_font_sized(&G.cjk, 6 / 40.0f);
+        G.pixel12 = fo_font_sized(&G.cjk, 12 / 40.0f);
+        G.pixel21 = fo_font_sized(&G.cjk, 21 / 40.0f);
     }
     fo_controls_layout(&G.controls, width, height);
     fo_controls_load(&G.controls, &G.prefs);

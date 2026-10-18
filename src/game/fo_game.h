@@ -10,6 +10,11 @@ enum {
     FO_TOUCH_ENDED = 2,
 };
 
+// The language and the country of the device, as "ja" and "JP", or "" for
+// none. Call it before fo_game_start. The texts and the fonts follow the
+// language, as the I18NBundle and the ResourceManager of GANGFORT.
+void fo_game_locale(const char *language, const char *country);
+
 // Opens the APK, loads the assets, and starts the first screen. width and
 // height are the size of the drawable in pixels. Returns 0 on failure;
 // fo_game_error then tells the reason.
