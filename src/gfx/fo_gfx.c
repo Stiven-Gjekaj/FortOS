@@ -196,6 +196,7 @@ void fo_gfx_begin(int width, int height, FOColor clear) {
     gScreenW = (float)width;
     gScreenH = (float)height;
     glViewport(0, 0, width, height);
+    glDisable(GL_SCISSOR_TEST);
     glClearColor(clear.r, clear.g, clear.b, clear.a);
     glDepthMask(GL_TRUE);
     glClearDepthf(1);
@@ -288,6 +289,16 @@ void fo_gfx_scope_end(void) {
     if (gProgram != &gScope) return;
     fo_gfx_flush();
     use_program(&gPlain);
+}
+
+void fo_gfx_clip(int x, int y, int w, int h) {
+    fo_gfx_flush();
+    if (w <= 0 || h <= 0) {
+        glDisable(GL_SCISSOR_TEST);
+        return;
+    }
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(x, y, w, h);
 }
 
 void fo_gfx_flush(void) {

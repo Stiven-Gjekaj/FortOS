@@ -80,6 +80,10 @@ void fo_gfx_snapshot(FOTexture *texture, int width, int height);
 // Sends the sprites that wait in the batch to the GPU.
 void fo_gfx_flush(void);
 
+// Draws only in the rectangle of screen pixels (x, y, w, h), as the clip of
+// a ScrollPane of libGDX. w or h at 0 or less ends the clip.
+void fo_gfx_clip(int x, int y, int w, int h);
+
 // The number of draw calls in the last frame, for the speed log.
 int fo_gfx_draw_calls(void);
 
