@@ -14,6 +14,8 @@ typedef struct {
     int S;             // The last run frame, for the bob.
     float D;           // The time of the last idle sample, for idl().
     float smokeTime;   // Lsmoke: the last cigarette smoke of the spy.
+    float scopeX, scopeY;  // SniperRifle.g(): the scope, while the rifle aims.
+    float scopeArm;        // The angle of the arm while the rifle aims.
 } FOLook;
 
 // Finds the regions of each class and each team. Call it after the

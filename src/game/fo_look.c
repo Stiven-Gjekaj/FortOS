@@ -362,6 +362,26 @@ static void draw_main(const FOWorld *world, const FOPlayer *p, FOLook *look, flo
         float cx = Px + (ox * cosf(phi) - oy * sinf(phi));
         float cy = Py + (oy * cosf(phi) + ox * sinf(phi));
         float rot = A + ((!p->facingRight && A != 0) ? 180 : 0);
+        if (w->def->kind == FO_SHOT_HITSCAN && A != 0 && ws->w) {
+            // SniperRifle.a(ada) (alw.java:117-145): the rifle at the eye.
+            float bx, by;
+            fo_player_position(p, &bx, &by);
+            float rw = ws->w * Z, rh = ws->h * Z;
+            float f = (s > 0 ? 0.6f : 0.3f) + arm->h + arm->jx;
+            if (s < 0) f = fw - f;
+            float fB = (s > 0 ? 0.3f : -0.1f) + arm->jy + idl + bobM;
+            float qx = bx - fw / 2 + f, qy = by - 0.95f + arm->ky + fB;
+            float a2 = rw / 2 - 0.5f, b2 = rh / 2 - 0.5f;
+            if (s < 0) b2 += 0.3f;
+            cx = qx + (a2 * cosf(phi) - b2 * sinf(phi)) - a2;
+            cy = qy + (s > 0 ? 0 : 0.6f) + (a2 * sinf(phi) + b2 * cosf(phi)) - b2 + xL;
+            // SniperRifle.g(): the scope is (6.5, -0.5) px from the centre.
+            float sy = s > 0 ? -0.5f * Z : 0.5f * Z;
+            look->scopeX = cx + (6.5f * Z * cosf(phi) - sy * sinf(phi));
+            look->scopeY = cy + (sy * cosf(phi) + 6.5f * Z * sinf(phi));
+            look->scopeArm = (s > 0 ? 90 : -90) +
+                             57.295776f * atan2f((by + arm->ky) - ((cy - rh / 2) + 0.2f), (s * arm->kx + bx) - (cx - s * rw / 2));
+        }
         draw_centered(ws, cx, cy, s, rot, tint);
         // The muzzle flash: 20 ms after a shot, only while it aims.
         const FOSprite *flash = &gFlashes[w->def->item];
@@ -383,7 +403,11 @@ static void draw_main(const FOWorld *world, const FOPlayer *p, FOLook *look, flo
     if (l->arm.w) {
         float armRot = 0;
         if (w->def) {
-            armRot = A + (p->facingRight ? arm_offset(w, nowMs) : -arm_offset(w, nowMs));
+            if (w->def->kind == FO_SHOT_HITSCAN && A != 0) {
+                armRot = look->scopeArm;
+            } else {
+                armRot = A + (p->facingRight ? arm_offset(w, nowMs) : -arm_offset(w, nowMs));
+            }
             if (!p->facingRight && A != 0) armRot -= 180;
         }
         float aw = arm->h, ah = arm->i;
