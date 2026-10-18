@@ -29,8 +29,8 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Add the death pits and the fall zones.
 - Add the camera: the follow, the view width, and the clamp to the map.
 - Add the two touch sticks of the original, with their default positions.
-- Add an oracle that runs the original Java code on the Mac and compares
-  a scenario with the C code.
+- Test the walk, the jump, the doors, and the death areas with the values
+  of the original code.
 
 ## 0.3: the first fight
 
