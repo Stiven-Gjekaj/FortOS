@@ -8,6 +8,9 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
     [application setStatusBarHidden:YES];
+    // The iOS backend of libGDX keeps the screen on (preventScreenDimming).
+    // A match has long times with no touch, as the wait for a respawn.
+    application.idleTimerDisabled = YES;
     self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     _game = [[FOGameViewController alloc] init];
     self.window.rootViewController = _game;
