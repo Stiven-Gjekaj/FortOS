@@ -1,5 +1,6 @@
 #import "FOAppDelegate.h"
 #import "FOGameViewController.h"
+#include "fo_audio.h"
 
 @implementation FOAppDelegate {
     FOGameViewController *_game;
@@ -17,10 +18,12 @@
 - (void)applicationWillResignActive:(UIApplication *)application {
     // iOS stops the app when it draws with OpenGL in the background.
     [_game setPaused:YES];
+    fo_audio_set_active(0);
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
     [_game setPaused:NO];
+    fo_audio_set_active(1);
 }
 
 @end
