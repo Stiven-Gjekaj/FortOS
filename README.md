@@ -29,11 +29,11 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 ---
 
 > [!NOTE]
-> **Version 0.9.0 is out.** Play single player against the bots of
-> GANGFORT on the three maps, with the menus, the settings, the control
-> setup, and the 34 hats and 5 store weapons of the original, at 60 frames
-> each second on the iPhone 4S with 12 players. The next version compares
-> each part with the original once more. [TODO.md](TODO.md) lists the
+> **Version 1.0.0 is out.** Play single player against the bots of
+> GANGFORT on the three maps: King of the Hill, the bomb, and capture the
+> flag. FortOS has the nine classes, the menus, the 34 hats and 5 store
+> weapons, the sounds, and the effects of the original, at 60 frames each
+> second on the iPhone 4S with 12 players. [TODO.md](TODO.md) lists the
 > roadmap.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes of each release.
 
