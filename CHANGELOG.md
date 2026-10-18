@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.0 (2026-10-18)
+
+A last comparison of each class, weapon, mode, and bot with the code of
+GANGFORT found these differences. FortOS now does as the original:
+
+- The colorful flamethrower makes two flames for each shot.
+- A sentry does not shoot while the arm of its builder is at a wall.
+- A dropped weapon fades out when its owner spawns, and gives no ammo
+  while it fades.
+- A rocket also makes the hit effect on a wall.
+- On the hill, the body of the victim counts in the test of the holder of
+  the objective, for the extra point of the kill.
+- A death with no damage gives the victim the 2 points, and makes no row
+  in the kill feed.
+- The respawn text fades in and out over 0.3 s.
+- Equal scores keep the order of the list on the round-over dialog.
+- A bot engineer that aims keeps the side of its aim when it builds.
+
 ## 0.9.0 (2026-10-18)
 
 - A launch image in the colour of the splash, so the start shows no
