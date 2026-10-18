@@ -8,11 +8,11 @@ milestone on GitHub, and each item below is an issue in that milestone.
 The counts come from the code of GANGFORT 2.1 for Android: 9 classes, 16
 weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 
-## 0.1: the foundation
+## 0.1: the foundation (done, 2026-10-18)
 
 - Add the app, install, and package scripts, and the Cydia packaging.
-- Read `GANGFORT.apk` from `/var/mobile/Media/FortOS/` and unpack its
-  `assets/res/` into the cache.
+- Read `GANGFORT.apk` from `/var/mobile/Media/FortOS/`, and keep the
+  decoded textures in a cache.
 - Read the libGDX atlases, and draw sprites with OpenGL ES 2.0, in
   landscape, at 60 frames per second.
 - Draw the layers of a map image with the parallax of the original.
