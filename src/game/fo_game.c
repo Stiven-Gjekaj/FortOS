@@ -172,9 +172,9 @@ void fo_game_frame(double dt) {
     }
     clamp_camera();
     fo_gfx_begin(G.width, G.height, fo_rgb(0x26231f));
-    fo_gfx_vignette(!G.noVignette);
     draw_world();
     draw_hud();
+    if (!G.noVignette) fo_gfx_vignette();
     fo_gfx_flush();
 }
 

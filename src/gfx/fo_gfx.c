@@ -24,7 +24,8 @@ typedef struct {
 
 static FOVertex gVertices[FO_MAX_SPRITES * 4];
 static int gSprites;
-static FOProgram gPlain, gVignette;
+static FOProgram gPlain;
+static FOTexture gVignette;
 static FOProgram *gProgram;
 static GLuint gIndexBuffer;
 static GLuint gVertexBuffer;
@@ -58,20 +59,6 @@ static const char *kPlainShader =
     "varying lowp vec4 v_color;\n"
     "void main() {\n"
     "    gl_FragColor = texture2D(texture, v_texcoord) * v_color;\n"
-    "}\n";
-
-// res/shaders/vignette.frag of GANGFORT, with the same numbers.
-static const char *kVignetteShader =
-    "uniform sampler2D texture;\n"
-    "uniform mediump vec2 resolution;\n"
-    "varying mediump vec2 v_texcoord;\n"
-    "varying lowp vec4 v_color;\n"
-    "void main() {\n"
-    "    lowp vec4 color = texture2D(texture, v_texcoord) * v_color;\n"
-    "    mediump float len = length(gl_FragCoord.xy / resolution - 0.5);\n"
-    "    mediump float vignette = smoothstep(0.65, 0.45, len);\n"
-    "    color.rgb = mix(color.rgb, color.rgb * vignette, 0.45);\n"
-    "    gl_FragColor = color;\n"
     "}\n";
 
 static GLuint compile(GLenum type, const char *source) {
@@ -120,7 +107,7 @@ static void use_program(FOProgram *program) {
 
 int fo_gfx_init(void) {
     GLuint vertex = compile(GL_VERTEX_SHADER, kVertexShader);
-    if (!make_program(&gPlain, vertex, kPlainShader) || !make_program(&gVignette, vertex, kVignetteShader)) return 0;
+    if (!make_program(&gPlain, vertex, kPlainShader)) return 0;
 
     // Each sprite is two triangles over four vertices.
     static GLushort indices[FO_MAX_SPRITES * 6];
@@ -203,11 +190,42 @@ void fo_gfx_depth(int mode, float z) {
     }
 }
 
-void fo_gfx_vignette(int on) {
-    FOProgram *want = on ? &gVignette : &gPlain;
-    if (want == gProgram) return;
+// res/shaders/vignette.frag of GANGFORT gives color * mix(1, v, 0.45), with
+// v = smoothstep(0.65, 0.45, the distance from the middle of the screen in
+// screen units). This texture holds 0.55 + 0.45 * v, and a multiply blend
+// puts it over the frame in one pass. Reason: the shader of the original
+// is too slow on the A5 for each pixel of each layer.
+static void make_vignette(void) {
+    enum { size = 64 };
+    static unsigned char pixels[size * size * 4];
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            float dx = (x + 0.5f) / size - 0.5f, dy = (y + 0.5f) / size - 0.5f;
+            float len = sqrtf(dx * dx + dy * dy);
+            float t = (len - 0.65f) / (0.45f - 0.65f);
+            t = t < 0 ? 0 : t > 1 ? 1 : t;
+            float v = t * t * (3 - 2 * t);
+            unsigned char m = (unsigned char)((0.55f + 0.45f * v) * 255 + 0.5f);
+            unsigned char *p = &pixels[(y * size + x) * 4];
+            p[0] = p[1] = p[2] = m;
+            p[3] = 255;
+        }
+    }
+    gVignette = fo_gfx_texture(pixels, size, size);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+}
+
+void fo_gfx_vignette(void) {
+    if (!gVignette.id) make_vignette();
     fo_gfx_flush();
-    use_program(want);
+    fo_gfx_depth(FO_DEPTH_OFF, 0);
+    fo_gfx_view(0, 0, 1, 1);
+    glBlendFunc(GL_ZERO, GL_SRC_COLOR);
+    FOSprite s = fo_gfx_whole(&gVignette);
+    fo_gfx_draw(&s, 0, 0, 1, 1, 0, 0, 0, 0, FO_WHITE);
+    fo_gfx_flush();
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void fo_gfx_flush(void) {

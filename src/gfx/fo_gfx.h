@@ -50,8 +50,9 @@ enum {
 // to 1 (far).
 void fo_gfx_depth(int mode, float z);
 
-// Turns the vignette of GANGFORT on or off for the next sprites.
-void fo_gfx_vignette(int on);
+// Darkens the edges of the frame, as the vignette of GANGFORT. Call it
+// after the frame is drawn.
+void fo_gfx_vignette(void);
 
 // Draws sprite with its bottom left corner at (x, y) and the size (w, h).
 // The sprite turns by angle radians around the point (x + ox, y + oy).
