@@ -108,6 +108,27 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   scales it by 0.1 and does not turn the y axis, so the sign is at
   (58.2, 20.55). FortOS uses the same place.
 
+- **Some bot names are not in FortOS.** The original list of 139 names
+  (xa.java:17) has slurs, a pun on Hitler, a terror leader, a homophobic
+  tag, and the names of real politicians. FortOS removes these 17 names
+  and keeps the other 122, also the repeats. Reason: FortOS is a public
+  project.
+- **The bot code follows the bytecode where JADX is wrong.** The search of
+  zu.java skips a closed waypoint with a cost that is not smaller. JADX
+  shows an update of its parent, which would make a loop. The edge test of
+  aks.java goes on to the next object. JADX shows a return. FortOS reads
+  these parts with dexdump.
+- **A paused bot keeps its speed.** The navigator of the original does not
+  call Player.h(float) while it waits, so nothing sets the speed of the
+  bot, and the friction of the ground stops it. FortOS skips the walk of
+  the player in that frame. The same is true for a bot at the end of a
+  round.
+- **Quit goes to the single player screen.** The original goes to the
+  main menu, which comes in 0.8. The single player screen has no back
+  button until then.
+- **The characters of the class dialog have no hats.** The hats come with
+  the items in 0.8.
+
 ## The quirks of the original that stay
 
 - The ray of the sniper rifle ends at the point (cos, sin) x 300 of the
@@ -127,6 +148,14 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   arrow (ahy.java:86-88).
 - After the bomb goes off, the camera goes up 100 m each second, so it is
   at the top of the fall area at once (acl.java:76-88).
+- A shot of a bot takes 2 ammo: one in the weapon, and one more in the
+  aimer (alz.java:122, zi.java:171).
+- A red bot always wants the bomb, because the place of a player that is
+  not in the list of pushers is 0 (act.java:316-327, zk.java:110).
+- The path search adds squared lengths, so the bots like many short links
+  more than one long link (zu.java:57).
+- The medic bot follows the idle human player too, and near the objective
+  it leaves its patient for the objective (zs.java:73-123).
 
 ## Identity
 
