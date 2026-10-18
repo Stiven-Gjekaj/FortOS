@@ -628,7 +628,7 @@ static void player_update(FOWorld *world, FOPlayer *p, float dt) {
     touch_purge(&p->left);
     touch_purge(&p->right);
     if (!p->alive) return;
-    player_move(world, p);
+    if (!p->noMove) player_move(world, p);
     update_facing(p);
     fo_combat_weapon_update(p, dt);
     fo_classes_update(world, p, dt);

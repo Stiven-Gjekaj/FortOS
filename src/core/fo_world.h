@@ -181,6 +181,8 @@ typedef struct FOPlayer {
     float health;
     FOTouchSet foot, left, right;
     int move;                // The move code of the input.
+    int noMove;              // The controller skips Player.h(float) in this
+                             // frame, so the speed stays (a paused bot).
     long long jumpTime;      // Q: the time of the last jump.
     int doubleJumpReady;     // T: the rusher can jump in the air.
     int facingRight;         // az
