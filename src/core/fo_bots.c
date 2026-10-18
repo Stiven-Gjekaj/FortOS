@@ -262,10 +262,12 @@ static void nav_clear(FOBot *b) {
     b->free = 0;
 }
 
-// zn.a() and zn.b(): the bot turns to the left or to the right at once.
+// zn.a() and zn.b() (zn.java:173-181): the bot moves to the left or to the
+// right, and Player.h(float) turns it at once only when its weapon does not
+// aim (xn.java:635). With an aim, the aim keeps the side (xn.java:684-696).
 static void nav_face(FOPlayer *p, int right) {
     p->move = right ? FO_MOVE_RIGHT : FO_MOVE_LEFT;
-    p->facingRight = right;
+    if (!p->weapon.def || p->weapon.angle == 0) p->facingRight = right;
 }
 
 static int weapon_busy(const FOWorld *world, const FOPlayer *p) {
