@@ -376,9 +376,12 @@ void fo_hud_bomb_hint(const FOWorld *world, float dt) {
     fo_font_draw(gFont, fo_text_get(gTexts, "uphill_hint_text2"), x, top - 0.4f, a, c, FO_ALIGN_CENTER);
 }
 
+// Collections.sort keeps the order of the list for equal scores
+// (ajl.java:260-261). qsort does not, so the place in the list decides.
 static int by_score(const void *a, const void *b) {
     const FOPlayer *pa = *(const FOPlayer *const *)a, *pb = *(const FOPlayer *const *)b;
-    return pb->score - pa->score;
+    if (pb->score != pa->score) return pb->score - pa->score;
+    return pa < pb ? -1 : pa > pb;
 }
 
 static void draw_box(const char *name, float x, float y, float w, float h, float alpha) {
