@@ -101,7 +101,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Make the first start and the next starts fast.
 - Fix the faults that the play tests find.
 
-## 1.0: the full game
+## 1.0: the full game (done, 2026-10-18)
 
 - Compare each class, weapon, mode, and bot with the original once more.
 
