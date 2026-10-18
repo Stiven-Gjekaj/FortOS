@@ -235,14 +235,27 @@ static void draw_kill_feed(void) {
 }
 
 // DeathRespawnMessage (aie.java) and GameScreen (aeb.java:399-414).
-static void draw_respawn(const FOWorld *world, const FOPlayer *p) {
-    if (p->alive || !p->deathTime) return;
-    int seconds = (int)ceilf((10000 - (float)(world->now - p->deathTime)) / 1000.0f);
-    if (seconds < 1) return;
+// RespawnText (aie.java, aeb.java:400-414): the text fades in over 0.3 s
+// while the wait goes on, and fades out over 0.3 s with its last number.
+static float gRespawnAlpha;
+static int gRespawnSeconds;
+
+static void draw_respawn(const FOWorld *world, const FOPlayer *p, float dt) {
+    int seconds = 0;
+    if (!p->alive && p->deathTime) seconds = (int)ceilf((10000 - (float)(world->now - p->deathTime)) / 1000.0f);
+    if (seconds > 0) {
+        gRespawnSeconds = seconds;
+        gRespawnAlpha += dt / 0.3f;
+    } else {
+        gRespawnAlpha -= dt / 0.3f;
+    }
+    gRespawnAlpha = gRespawnAlpha < 0 ? 0 : gRespawnAlpha > 1 ? 1 : gRespawnAlpha;
+    if (gRespawnAlpha <= 0 || gRespawnSeconds < 1) return;
     char text[128];
-    fo_text_format(fo_text_get(gTexts, "respawn_text"), seconds, text, sizeof(text));
+    fo_text_format(fo_text_get(gTexts, "respawn_text"), gRespawnSeconds, text, sizeof(text));
     float h = fo_font_line(gFont, gU);
-    fo_font_draw(gFont, text, gW / 2, (gH * 25 / 150) / 2 + h / 2, gU, FO_WHITE, FO_ALIGN_CENTER);
+    FOColor c = {1, 1, 1, gRespawnAlpha};
+    fo_font_draw(gFont, text, gW / 2, (gH * 25 / 150) / 2 + h / 2, gU, c, FO_ALIGN_CENTER);
 }
 
 // mm:ss of a time in seconds.
@@ -353,7 +366,7 @@ void fo_hud_draw(const FOWorld *world, const FOPlayer *local, float dt) {
     // and the bars of the kill cam cover the objective.
     if (gKillcam[0]) fo_hud_death_cam(gKillcam);
     else draw_kill_feed();
-    if (local) draw_respawn(world, local);
+    if (local) draw_respawn(world, local, dt);
 }
 
 // RollableBomb.a(alh) (act.java:262-301): under the bomb, the local pusher
