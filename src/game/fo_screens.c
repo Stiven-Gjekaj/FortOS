@@ -1,9 +1,13 @@
 #include "fo_screens.h"
 
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "fo_game.h"
+#include "fo_items.h"
 #include "fo_look.h"
 #include "fo_sound.h"
 
@@ -827,6 +831,329 @@ FOScreenResult fo_menu_tap(float x, float y) {
         if (inside(x, y, l.buttons[i].x, l.buttons[i].y, l.buttons[i].w, l.buttons[i].h)) {
             r.action = actions[i];
             r.click = 1;
+        }
+    }
+    return r;
+}
+
+// --- ItemsScreen (afb.java) -----------------------------------------------
+
+// The order of the characters on the panel (afb.java:118).
+static const int kItemsOrder[9] = {1, 6, 3, 4, 2, 5, 7, 9, 8};
+static FOLook gItemLooks[10];
+
+// The shadow under a character of ItemsEquippedUICharacter (ait.java:45-66).
+static float char_shadow_offset(int cls) {
+    switch (cls) {
+    case 3: return 1.25f * gU;
+    case 4: return 0.25f * gU;
+    case 5: case 6: case 9: return 0.5f * gU;
+    case 8: return -0.75f * gU;
+    default: return 0;
+    }
+}
+
+// An ait: 9 x 19 units, with (x, y) at its bottom left. team 2 is red.
+static void item_char(const FOWorld *world, int cls, float x, float y, int shadow, FOLook *look) {
+    float u = gU;
+    if (shadow) {
+        FOSprite s = ui("item_char_bottom_shadow");
+        image(&s, x + char_shadow_offset(cls) + 4.5f * u - s.w * u / 2, y - 2 * u, s.w * u, s.h * u);
+    }
+    fo_look_preview(world, cls, FO_TEAM_RED, gLoadouts[cls].hat, gLoadouts[cls].weapon, x + 4.5f * u, y + 9.5f * u, u,
+                    gClassRandom[cls] + world->now / 1000.0f, gW, gH, look);
+}
+
+typedef struct {
+    FOBox panel;
+    FOBox chars[9];          // The bottom left of each character, 9 x 19 units.
+} FOItemsLayout;
+
+static FOItemsLayout items_layout(void) {
+    FOItemsLayout l;
+    float u = gU;
+    FOSprite bg = ui("items_charsbg");
+    float bw = bg.w * u, bh = bg.h * u, bandY = 35.0f * gH / 150.0f;
+    l.panel = (FOBox){gW / 2 - bw / 2, bandY + 33 * u - bh / 2, bw, bh};
+    float f10 = 20 * u, step = (bw - 2 * f10) / 8;
+    for (int i = 0; i < 9; i++) l.chars[i] = (FOBox){l.panel.x + f10 + i * step - 9 * u, l.panel.y + 12 * u, 9 * u, 19 * u};
+    return l;
+}
+
+void fo_items_draw(const FOWorld *world) {
+    menu_screen(text("items"));
+    back_draw();
+    FOItemsLayout l = items_layout();
+    FOSprite bg = ui("items_charsbg");
+    image(&bg, l.panel.x, l.panel.y, l.panel.w, l.panel.h);
+    for (int i = 0; i < 9; i++) {
+        int c = kItemsOrder[i];
+        item_char(world, c, l.chars[i].x, l.chars[i].y, 1, &gItemLooks[c]);
+    }
+}
+
+FOScreenResult fo_items_tap(float x, float y) {
+    FOScreenResult r = {0};
+    if (back_tap(x, y)) r.action = FO_SCREEN_BACK;
+    FOItemsLayout l = items_layout();
+    // Each character takes taps in twice its size (afb.java:126-128).
+    for (int i = 0; i < 9; i++) {
+        FOBox b = l.chars[i];
+        if (inside(x, y, b.x - b.w / 2, b.y - b.h / 2, 2 * b.w, 2 * b.h)) {
+            r.action = FO_SCREEN_ITEMS_CLASS;
+            r.cls = kItemsOrder[i];
+        }
+    }
+    r.click = r.action != FO_SCREEN_NONE;
+    return r;
+}
+
+// --- ItemSelectionScreen (aeo.java) and ItemsList (aiu.java) ---------------
+
+#define FO_SELECT_MAX 48
+static const char *const kClassShadows[10] = {"",           "shadow_rusher", "shadow_marine", "shadow_torcher",
+                                              "shadow_yash", "shadow_mass",   "shadow_builder", "shadow_dealer",
+                                              "shadow_camper", "shadow_agent"};
+
+static struct {
+    int cls;
+    FOLoadout loadout;
+    int items[FO_SELECT_MAX];
+    int count;
+    int selected, previous;  // f of aiu, and the cell before it.
+    int armed;               // v of aeo: a second tap on this cell equips.
+    float selectTime;        // The time since the last selection.
+    float scroll;            // scrollY of the ScrollPane, 0 at the top.
+    int touch;               // The finger on the list, or -1.
+    float touchY, touchScroll, touchMove;
+    FOLook look;
+} gSel;
+
+void fo_select_open(int cls) {
+    memset(&gSel, 0, sizeof(gSel));
+    gSel.cls = cls;
+    gSel.loadout = gLoadouts[cls];
+    gSel.touch = -1;
+    gSel.armed = -1;
+    // All the items are owned: the hats, and the weapons of the store.
+    // The default weapons are not in the list (they have no picture).
+    for (int i = 0; i < FO_ITEM_COUNT && gSel.count < FO_SELECT_MAX; i++) {
+        const FOItem *it = &kFOItems[i];
+        if (it->icon && fo_item_allowed(it->id, cls)) gSel.items[gSel.count++] = it->id;
+    }
+    // aiu.a(aax, aay): the first item is selected. aeo.show(): the hat of
+    // the class is selected when it has one.
+    gSel.armed = 0;
+    for (int i = 0; i < gSel.count; i++) {
+        if (gSel.loadout.hat && gSel.items[i] == gSel.loadout.hat) gSel.selected = gSel.armed = i;
+    }
+    gSel.previous = gSel.selected;
+    gSel.selectTime = 1;
+}
+
+FOLoadout fo_select_loadout(void) {
+    return gSel.loadout;
+}
+
+static int item_equipped(int id) {
+    return id && (gSel.loadout.hat == id || gSel.loadout.weapon == id);
+}
+
+typedef struct {
+    FOBox list, inner, info, shadowBg, shadow, character;
+    float cellW, cellH, titleY;
+} FOSelectLayout;
+
+static FOSelectLayout select_layout(void) {
+    FOSelectLayout l;
+    float u = gU, bandY = 35.0f * gH / 150.0f;
+    l.titleY = gH - big_h() - 3 * u;
+    l.list = (FOBox){9 * u, (l.titleY - 3 * u) / 2 - 42 * u, 85 * u, 84 * u};
+    l.inner = (FOBox){l.list.x + u, l.list.y + 2 * u, 83 * u, 81 * u};
+    l.cellW = l.inner.w / 2;
+    l.cellH = 41 * u;
+    FOSprite info = ui("items_info_bg_small");
+    l.info = (FOBox){gW - info.w * u, bandY + 33 * u - info.h * u / 2, info.w * u, info.h * u};
+    FOSprite sbg = ui("items_selection_shadowbg");
+    float sx = ((l.list.x + l.list.w) + l.info.x) / 2 - sbg.w * u / 2;
+    l.shadowBg = (FOBox){sx, bandY + 2 * u, sbg.w * u, sbg.h * u};
+    FOSprite sh = ui(kClassShadows[gSel.cls]);
+    l.shadow = (FOBox){sx + l.shadowBg.w / 2 - sh.w * u / 2, l.shadowBg.y + 2 * u, sh.w * u, sh.h * u};
+    l.character = (FOBox){sx + 29 * u, l.shadowBg.y + 3 * u, 9 * u, 19 * u};
+    return l;
+}
+
+static float select_max_scroll(const FOSelectLayout *l) {
+    float content = ((gSel.count + 1) / 2) * l->cellH;
+    return content > l->inner.h ? content - l->inner.h : 0;
+}
+
+// A small random number from the item id, so that the holes of a cell stay
+// in their places (aiu.java:96-109 takes them at random).
+static float cell_random(unsigned int *seed) {
+    *seed = *seed * 1103515245u + 12345u;
+    return (float)((*seed >> 16) & 0x7fff) / 32767.0f;
+}
+
+static void select_list_draw(const FOSelectLayout *l) {
+    float u = gU;
+    FOSprite bg = ui("items_list_bg");
+    image(&bg, l->list.x, l->list.y, l->list.w, l->list.h);
+    fo_gfx_clip((int)floorf(l->inner.x), (int)floorf(l->inner.y), (int)ceilf(l->inner.w), (int)ceilf(l->inner.h));
+    FOSprite row = ui("items_list_row_bg");
+    for (int i = 0; i < gSel.count; i++) {
+        int r = i / 2, c = i % 2;
+        float cx = l->inner.x + c * l->cellW;
+        float cy = l->inner.y + l->inner.h - (r + 1) * l->cellH + gSel.scroll;
+        if (cy > l->inner.y + l->inner.h || cy + l->cellH < l->inner.y) continue;
+        if (c == 0 && r % 2 == 0) image(&row, cx, cy, 2 * l->cellW, l->cellH);
+        unsigned int seed = (unsigned int)gSel.items[i] * 2654435761u;
+        int holes = 1 + (int)(cell_random(&seed) * 1.999f);
+        for (int k = 0; k < holes; k++) {
+            char name[24];
+            snprintf(name, sizeof(name), "items_list_hole%d", 1 + (int)(cell_random(&seed) * 4.999f));
+            FOSprite h = ui(name);
+            float hw = h.w * u, hh = h.h * u, hx = 0, hy = 0;
+            for (int t = 0; t < 20; t++) {
+                hx = hw + (l->cellW - 2 * hw) * cell_random(&seed);
+                hy = hh + (l->cellH - 2 * hh) * cell_random(&seed);
+                float dx = hx - l->cellW / 2, dy = hy - l->cellH / 2;
+                if (dx * dx + dy * dy >= 16 * u * 16 * u) break;
+            }
+            image(&h, cx + hx, cy + hy, hw, hh);
+        }
+        fo_look_item_icon(S.ui, gSel.items[i], cx + l->cellW / 2, cy + l->cellH / 2 - u, u);
+    }
+    // The selector moves one unit from the old cell, rests after 0.15 s,
+    // and changes its colour each 0.3 s (aiu.java:247-276).
+    if (gSel.count > 0) {
+        int i = gSel.selected, p = gSel.previous;
+        float dx = 0, dy = 0;
+        if (gSel.selectTime < 0.15f) {
+            if (p % 2 == 0 && i % 2 == 1) dx = u;
+            else if (p % 2 == 1 && i % 2 == 0) dx = -u;
+            if (p - i >= 2 || (i % 2 == p % 2 && p > i) || (i % 2 == 1 && p % 2 == 0 && p > i)) dy = u;
+            else if (p - i <= -2 || (i % 2 == p % 2 && p < i) || (i % 2 == 0 && p % 2 == 1 && p < i)) dy = -u;
+        }
+        int white = gSel.selectTime > 0.15f && (int)floorf((gSel.selectTime - 0.15f) / 0.3f) % 2 == 1;
+        FOSprite sel = ui(white ? "items_list_selector_white" : "items_list_selector_orange");
+        float cx = l->inner.x + (i % 2) * l->cellW, cy = l->inner.y + l->inner.h - (i / 2 + 1) * l->cellH + gSel.scroll;
+        image(&sel, cx + (i % 2 == 1 ? 0.5f * u : 0) + dx, cy + u + dy, sel.w * u, sel.h * u);
+    }
+    fo_gfx_clip(0, 0, 0, 0);
+    // The darkening at the ends while more items are out of the view.
+    FOSprite more = ui("items_list_more_darkening");
+    float top = gSel.scroll / (10 * u), bottom = (floorf(gSel.count / 2.0f) * l->cellH - (gSel.scroll + l->inner.h)) / (10 * u);
+    top = top < 0 ? 0 : top > 1 ? 1 : top;
+    bottom = bottom < 0 ? 0 : bottom > 1 ? 1 : bottom;
+    if (more.w) {
+        float gx = l->list.x, gy = l->list.y;
+        fo_gfx_draw(&more, gx, gy + l->inner.h - u, l->list.w, 4 * u, 0, 0, 0, 0, (FOColor){1, 1, 1, top});
+        fo_gfx_draw(&more, gx, gy + u, l->list.w, 4 * u, 0, 0, 0, 0, (FOColor){1, 1, 1, bottom});
+    }
+}
+
+void fo_select_draw(const FOWorld *world, float dt) {
+    float u = gU, lh = text_h(S.pixel6);
+    gSel.selectTime += dt;
+    fo_gfx_begin((int)gW, (int)gH, (FOColor){0.1484375f, 0.13671875f, 0.1328125f, 1});
+    fo_gfx_view(0, 0, gW, gH);
+    band(35.0f * gH / 150.0f);
+    FOSelectLayout l = select_layout();
+    FOSprite info = ui("items_info_bg_small");
+    image(&info, l.info.x, l.info.y, l.info.w, l.info.h);
+    const char *title = text(kClassKeys[gSel.cls]);
+    big_label(title, gW / 2 - big_w(title) / 2, l.titleY, 0xece4cc, 0xe1661e);
+    back_draw();
+    if (gSel.count == 0) {
+        label(S.pixel6, text("you_have_no_items"), 0, 35.0f * gH / 150.0f + 33 * u - lh / 2, gW, lh, 0xece4cc, 1);
+        return;
+    }
+    int id = gSel.items[gSel.selected];
+    const char *hint = text(item_equipped(id) ? "click_item_unequip" : "click_item_equip");
+    label(S.pixel6, hint, 0, l.titleY - 7 * u - lh, gW, lh, 0xe7dec1, 1);
+    select_list_draw(&l);
+    // The title and the description of the item in the box at the right.
+    const FOItem *it = fo_item(id);
+    if (it) {
+        float cx = l.info.x + l.info.w / 2;
+        // ItemDataHelper.a(...) keeps the title and the description in
+        // lower case (aao.java:150). pixel6 has no capital letters.
+        char t[96], d[256];
+        snprintf(t, sizeof(t), "%s", text(it->title));
+        snprintf(d, sizeof(d), "%s", text(it->description));
+        for (char *c = t; *c; c++) *c = (char)tolower((unsigned char)*c);
+        for (char *c = d; *c; c++) *c = (char)tolower((unsigned char)*c);
+        label(S.pixel6, t, cx - text_w(S.pixel6, t) / 2, l.info.y + 57 * u - lh / 2, text_w(S.pixel6, t), lh, 0xece4cc, 1);
+        int lines = 1;
+        for (const char *c = d; *c; c++) lines += *c == '\n';
+        label(S.pixel6, d, cx, l.info.y + 36 * u - lines * lh / 2, 0, lines * lh, 0xece4cc, 1);
+    }
+    FOSprite sbg = ui("items_selection_shadowbg");
+    image(&sbg, l.shadowBg.x, l.shadowBg.y, l.shadowBg.w, l.shadowBg.h);
+    FOSprite sh = ui(kClassShadows[gSel.cls]);
+    image(&sh, l.shadow.x, l.shadow.y, l.shadow.w, l.shadow.h);
+    FOLoadout keep = gLoadouts[gSel.cls];
+    gLoadouts[gSel.cls] = gSel.loadout;
+    item_char(world, gSel.cls, l.character.x, l.character.y, 0, &gSel.look);
+    gLoadouts[gSel.cls] = keep;
+}
+
+// aer.java: the first tap on a cell selects it. A tap on the selected cell
+// equips the item, or takes it off. A weapon that comes off gives the
+// default weapon back.
+static void select_tap(int i) {
+    if (i < 0 || i >= gSel.count) return;
+    int id = gSel.items[i];
+    if (gSel.armed == i) {
+        const FOItem *it = fo_item(id);
+        int on = item_equipped(id);
+        if (it && it->kind == FO_ITEM_HAT) gSel.loadout.hat = on ? 0 : id;
+        if (it && it->kind == FO_ITEM_WEAPON) gSel.loadout.weapon = on ? 0 : id;
+    }
+    gSel.armed = i;
+    if (gSel.selected != i) {
+        gSel.previous = gSel.selected;
+        gSel.selected = i;
+        gSel.selectTime = 0;
+    }
+}
+
+FOScreenResult fo_select_touch(int id, int phase, float x, float y) {
+    FOScreenResult r = {0};
+    FOSelectLayout l = select_layout();
+    if (phase == FO_TOUCH_BEGAN) {
+        if (back_tap(x, y)) {
+            r.action = FO_SCREEN_BACK;
+            r.click = 1;
+            return r;
+        }
+        if (gSel.touch < 0 && inside(x, y, l.inner.x, l.inner.y, l.inner.w, l.inner.h)) {
+            gSel.touch = id;
+            gSel.touchY = y;
+            gSel.touchScroll = gSel.scroll;
+            gSel.touchMove = 0;
+        }
+        return r;
+    }
+    if (id != gSel.touch) return r;
+    // The list follows the finger. A finger that moved less than 3 units is a tap.
+    float d = y - gSel.touchY;
+    if (fabsf(d) > gSel.touchMove) gSel.touchMove = fabsf(d);
+    gSel.scroll = gSel.touchScroll + d;
+    float max = select_max_scroll(&l);
+    if (gSel.scroll < 0) gSel.scroll = 0;
+    if (gSel.scroll > max) gSel.scroll = max;
+    if (phase == FO_TOUCH_ENDED) {
+        gSel.touch = -1;
+        if (gSel.touchMove < 3 * gU && inside(x, y, l.inner.x, l.inner.y, l.inner.w, l.inner.h)) {
+            int c = x < l.inner.x + l.cellW ? 0 : 1;
+            int row = (int)floorf((l.inner.y + l.inner.h + gSel.scroll - y) / l.cellH);
+            int i = row * 2 + c;
+            if (i < gSel.count) {
+                select_tap(i);
+                r.click = 1;
+            }
         }
     }
     return r;

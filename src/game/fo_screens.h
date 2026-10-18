@@ -1,6 +1,7 @@
 // fo_screens: the screens and the dialogs around a match: SplashScreen
 // (ahe.java), MainMenuScreen (afk.java), CreditsScreen (adf.java),
 // SettingsScreen (ago.java), CustomizeTouchControlsScreen (adh.java),
+// ItemsScreen (afb.java), ItemSelectionScreen (aeo.java),
 // SingleplayerScreen (agv.java), TeamSelectionDialog (ajq.java),
 // ClassSelectionDialog (ahl.java), and MenuDialog (aja.java). The units are
 // pixels of the screen with y up. One UI unit is 1/281 of the width.
@@ -47,6 +48,7 @@ typedef enum {
     FO_SCREEN_SETTING,       // Settings: a checkbox changed.
     FO_SCREEN_CONTROLS_RESET,   // Control setup: the default places.
     FO_SCREEN_CONTROLS_STICKS,  // Control setup: value is 1 for two sticks.
+    FO_SCREEN_ITEMS_CLASS,      // Items: open the items of the class cls.
 } FOScreenAction;
 
 // The checkboxes of the settings screen, from the bottom.
@@ -85,6 +87,19 @@ FOScreenResult fo_settings_tap(float x, float y);
 // two sticks, and the reset button. The game draws the controls over it.
 void fo_setup_draw(int sticks);
 FOScreenResult fo_setup_tap(float x, float y, int sticks);
+
+// ItemsScreen: the nine characters with their items. The original also
+// has the store, the bag, and the free items.
+void fo_items_draw(const FOWorld *world);
+FOScreenResult fo_items_tap(float x, float y);
+
+// ItemSelectionScreen: the items that the class can use. A tap selects an
+// item, and a second tap equips it or takes it off. fo_select_loadout
+// gives the items of the class when the screen closes.
+void fo_select_open(int cls);
+void fo_select_draw(const FOWorld *world, float dt);
+FOScreenResult fo_select_touch(int id, int phase, float x, float y);
+FOLoadout fo_select_loadout(void);
 
 // SingleplayerScreen. The maps are in the order of the original:
 // flag_egypt, bomb_canyon, gts_gantown.
