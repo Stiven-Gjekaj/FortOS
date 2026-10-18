@@ -101,6 +101,34 @@ static void draw_weapon_info(const FOPlayer *p) {
     FOSprite bg = team_sprite(team, "weaponinfo_bgcolor");
     draw_stretched(&bg, lx + lw / 2 - (lw + 2 * u) / 2, ly - u, lw + 2 * u, lh + 2 * u);
     label(ammoText, lx, ly, lh, fo_rgb(0xffb866));
+    // The third bar (ajt.java:124-147): the cloak of the agent, the steel
+    // of the builder, and the uber of the dealer.
+    const char *key = NULL;
+    float value = 0, top = 100;
+    if (p->cls == FO_CLASS_SPY) {
+        key = "cloak";
+        value = p->cloakEnergy;
+    } else if (p->cls == FO_CLASS_ENGINEER) {
+        key = "steel";
+        value = p->steel;
+    } else if (p->cls == FO_CLASS_MEDIC) {
+        key = "rapidrush";
+        value = p->uberCharge;
+        top = 20;
+    }
+    if (key) {
+        float tw = 56 * u, th = 6 * u;
+        float tx = x + 8 * u, ty = gH - healthH - ammoH - th;
+        FOSprite tempty = team_sprite(team, "weaponinfo_thirdbar_empty");
+        FOSprite tfull = team_sprite(team, "weaponinfo_thirdbar_full");
+        draw_stretched(&tempty, tx, ty, tw, th);
+        draw_clipped(&tfull, tx, ty, tw, th, value < 0.5f ? 1 : value / top * tw);
+        const char *text = fo_text_get(gTexts, key);
+        float mw = fo_font_width(gFont, text, u), mh = fo_font_line(gFont, u);
+        float mx = tx + tw - mw - 3 * u, my = ty - mh;
+        draw_stretched(&bg, mx - 1.5f * u, my - u, mw + 2 * u, mh + u);
+        label(text, mx, my, mh, fo_rgb(0xffb866));
+    }
 }
 
 // DeathList.a(...) (aic.java:76-107): a new row for each kill.
