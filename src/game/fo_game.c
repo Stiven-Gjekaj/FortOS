@@ -241,6 +241,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
         return 0;
     }
     fo_controls_layout(&G.controls, width, height);
+    fo_controls_load(&G.controls, &G.prefs);
     fo_look_init(&G.sprites);
     fo_effects_init(&G.sprites);
     fo_ambient_init(&G.sprites);
