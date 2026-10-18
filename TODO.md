@@ -45,7 +45,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Add the health fridge and the weapon pickups.
 - Add the health bar, the ammo bar, and the kill feed.
 
-## 0.4: all classes
+## 0.4: all classes (done, 2026-10-18)
 
 - Add the 9 classes with their health and speed.
 - Port the 9 default weapons, with the flames, the grenades and their
