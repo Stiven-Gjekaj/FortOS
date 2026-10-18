@@ -11,6 +11,7 @@
 #include "fo_debug.h"
 #include "fo_font.h"
 #include "fo_gfx.h"
+#include "fo_bots.h"
 #include "fo_hud.h"
 #include "fo_look.h"
 #include "fo_maps.h"
@@ -30,6 +31,8 @@ static struct {
     FOText *texts;
     FOMap map;
     int mapLoaded;
+    FOBots bots;
+    int maxPlayers;           // The players of a match with the human: 8, 10, or 12.
     FOLook looks[FO_MAX_PLAYERS];
     FOCamera camera;
     FOControls controls;
@@ -82,6 +85,10 @@ static int start_map(FOMapId id) {
     // SingleplayerClient (xa.java:35): the local player is "you".
     if (G.texts) snprintf(p->name, sizeof(p->name), "%s", fo_text_get(G.texts, "you"));
     fo_world_spawn(G.map.world, p, G.localClass);
+    // SingleplayerGameController.i() (xa.java:138-206): the bots join after
+    // the first choice of a class.
+    fo_bots_init(&G.bots, G.map.world, G.maxPlayers, FO_LOCAL_ID);
+    fo_bots_fill(&G.bots, G.map.world);
     float x, y;
     fo_player_position(p, &x, &y);
     fo_camera_init(&G.camera, G.width, G.height, x, y);
@@ -99,6 +106,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
     G.height = height;
     G.localClass = FO_CLASS_SOLDIER;
     G.localTeam = FO_TEAM_BLU;
+    G.maxPlayers = 12;
     if (!fo_assets_open(apk_path)) {
         fail("Copy the APK of GANGFORT 2.1 from your copy of the game to\n"
              "/var/mobile/Media/FortOS/GANGFORT.apk\n\n"
@@ -331,6 +339,7 @@ void fo_game_frame(double dt) {
     double t0 = wall_seconds();
     FOPlayer *p = local_player();
     apply_input(p);
+    fo_bots_update(&G.bots, G.map.world, (float)dt);
     fo_world_update(G.map.world, (float)dt);
     for (int i = 0; i < FO_MAX_PLAYERS; i++) G.looks[i].stateTime += (float)dt;
     fo_hud_events(G.map.world, FO_LOCAL_ID, (float)dt);
@@ -391,7 +400,11 @@ void fo_game_debug(const char *command) {
     if (sscanf(command, "class %d", &n) == 1 && n >= 1 && n <= 9) {
         G.localClass = n;
         FOPlayer *p = local_player();
-        if (p) fo_world_spawn(G.map.world, p, n);
+        if (p) fo_world_change_class(G.map.world, p, n);
+    }
+    if (sscanf(command, "players %d", &n) == 1 && n >= 1 && n <= FO_MAX_PLAYERS) {
+        G.maxPlayers = n;
+        start_map(G.map.id);
     }
     if (sscanf(command, "team %31s", name) == 1) {
         G.localTeam = strcmp(name, "red") == 0 ? FO_TEAM_RED : FO_TEAM_BLU;
@@ -417,6 +430,28 @@ void fo_game_debug(const char *command) {
             fo_phys_body_position(md->flags[t].obj.body, &x, &y);
             fprintf(stderr, "dump: flag %d at %.2f %.2f carrier %d dropped %d\n", t, x, y, md->flags[t].carrier,
                     md->flags[t].dropped);
+        }
+    }
+    if (strncmp(command, "players", 7) == 0 && (command[7] == 0 || command[7] == '\n')) {
+        FOWorld *w = G.map.world;
+        for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+            const FOPlayer *q = &w->players[i];
+            if (!q->used) continue;
+            float x = 0, y = 0;
+            if (q->alive) fo_player_position(q, &x, &y);
+            const FOBot *b = NULL;
+            for (int k = 0; k < FO_MAX_PLAYERS; k++) {
+                if (G.bots.bots[k].used && G.bots.bots[k].id == q->id) b = &G.bots.bots[k];
+            }
+            float vx = 0, vy = 0;
+            if (q->alive) fo_player_velocity(q, &vx, &vy);
+            int first = b && b->pathCount > 0 ? G.bots.graph.points[b->path[0]].id : 0;
+            int last = b && b->pathCount > 0 ? G.bots.graph.points[b->path[b->pathCount - 1]].id : 0;
+            fprintf(stderr, "player %d %-10s team %d class %d alive %d at %6.2f %6.2f v %5.2f %5.2f move %d hp %3.0f "
+                            "ammo %3.0f score %d path %d (%d..%d) free %d paused %d nomove %d target %d\n",
+                    q->id, q->name, q->team, q->cls, q->alive, x, y, vx, vy, q->move, q->health, q->weapon.ammo, q->score,
+                    b ? b->pathCount : -1, first, last, b ? b->free : -1, b ? b->paused : -1, q->noMove,
+                    b ? b->target : -1);
         }
     }
     if (p && strncmp(command, "jump", 4) == 0) fo_player_jump(G.map.world, p);
