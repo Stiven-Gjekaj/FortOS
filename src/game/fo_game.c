@@ -367,6 +367,20 @@ void fo_game_debug(const char *command) {
     }
     FOPlayer *p = local_player();
     if (sscanf(command, "move %d", &n) == 1) G.debugMove = n == FO_MOVE_STOP ? 0 : n;
+    if (p && strncmp(command, "ability", 7) == 0) fo_player_ability(G.map.world, p);
+    if (p && strncmp(command, "backstab", 8) == 0) fo_player_backstab(G.map.world, p);
+    if (p && strncmp(command, "disguise", 8) == 0) fo_player_disguise(G.map.world, p, FO_LOCAL_ID);
+    if (p && sscanf(command, "heal %d", &n) == 1) fo_player_heal(G.map.world, p, n);
+    if (p && strncmp(command, "dump", 4) == 0) {
+        float x, y;
+        fo_player_position(p, &x, &y);
+        fprintf(stderr, "dump: player %d class %d at %.2f %.2f health %.0f steel %.0f\n", p->id, p->cls, x, y, p->health,
+                p->steel);
+        const FOSentry *se = &p->sentry;
+        if (se->obj.body) fo_phys_body_position(se->obj.body, &x, &y);
+        fprintf(stderr, "dump: sentry active %d landed %d built %lld at %.2f %.2f health %.0f\n", se->active,
+                se->landed, se->built, x, y, se->health);
+    }
     if (p && strncmp(command, "jump", 4) == 0) fo_player_jump(G.map.world, p);
     float f;
     if (sscanf(command, "shoot %f", &f) == 1) {
