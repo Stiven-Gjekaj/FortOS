@@ -67,6 +67,20 @@ int fo_map_load(FOMap *map, FOMapId id, unsigned int seed) {
         const FODoorDef *d = &def->doors[i];
         fo_world_add_door(map->world, d->team, d->x, d->y, d->w, d->h);
     }
+    // The game mode of each map: GantownMap (acp.java), BombCanyonMap
+    // (acj.java:34-39), and FlagEgyptMap (aco.java:42-43).
+    FOWorld *w = map->world;
+    switch (id) {
+    case FO_MAP_GANTOWN: fo_world_koth(w); break;
+    case FO_MAP_BOMB_CANYON:
+        fo_world_bomb(w, 1, 15.3f, 19.0f, 99.200005f, 2.3f);
+        fo_world_bomb_checkpoint(w, 47.0f, 10.6f);
+        fo_world_bomb_checkpoint(w, 78.5f, 16.9f);
+        fo_world_bomb_checkpoint(w, 13.1f, 16.9f);
+        break;
+    case FO_MAP_FLAG_EGYPT: fo_world_ctf(w, 113.65f, 11.1f, 6.75f, 11.1f); break;
+    default: break;
+    }
     map->cloudY = def->cloudY;
     reset_clouds(map);
     return 1;
