@@ -278,8 +278,8 @@ static void pickup_touch(FOWorld *world, FOPickup *k, FOPlayer *p) {
     k->active = 0;
     fo_phys_body_set_active(k->obj.body, 0);
     fo_phys_body_set_transform(k->obj.body, -5, -5, 0);
-    fo_world_event(world, FO_EVENT_SOUND, "item_gained", 0, 0);
-    world->events[world->event_count - 1].a = p->id;
+    // The original counts a statistic for the local player here
+    // (xx.java:62-64, xb.java). It plays no sound.
 }
 
 void fo_combat_contact(FOWorld *world, FOObj *a, FOObj *b, float px, float py) {
