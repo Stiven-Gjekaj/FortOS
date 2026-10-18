@@ -270,3 +270,18 @@ FO_TEST(testCombatPickupGivesAmmo) {
     FO_EQUAL_INT((int)p->weapon.ammo, 10);
     fo_world_free(world);
 }
+
+FO_TEST(testCombatColorfulFlamethrowerMakesTwoFlames) {
+    // alj.java:59-66: one shot, one ammo, two flames.
+    FOWorld *world = fo_world_new(kFlat, 3);
+    FOPlayer *p = fo_world_add_player(world, 1, FO_TEAM_BLU);
+    fo_player_set_loadout(p, FO_CLASS_PYRO, 0, FO_ITEM_COLORFUL_FLAMETHROWER);
+    fo_world_spawn(world, p, FO_CLASS_PYRO);
+    fo_phys_body_set_transform(p->obj.body, 20, 3.5f, 0);
+    run(world, 60);
+    float ammo = p->weapon.ammo;
+    FO_EXPECT(fo_player_shoot(world, p, 0));
+    FO_EQUAL_INT(activeBullets(world), 2);
+    FO_EQUAL_INT((int)(ammo - p->weapon.ammo), 1);
+    fo_world_free(world);
+}

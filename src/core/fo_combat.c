@@ -432,6 +432,13 @@ int fo_player_shoot(FOWorld *world, FOPlayer *p, float angle) {
     case FO_SHOT_GRENADE: {
         float dx = c + spread(world, def->spread), dy = s + spread(world, def->spread);
         spawn_bullet(world, p, mx, my, def->speed * dx, def->speed * dy);
+        // ColorfulFlamethrower.a(...) (alj.java:59-66) calls the shot of the
+        // flamethrower, then makes a second flame with its own spread.
+        if (def->item == FO_ITEM_COLORFUL_FLAMETHROWER) {
+            dx = c + spread(world, def->spread);
+            dy = s + spread(world, def->spread);
+            spawn_bullet(world, p, mx, my, def->speed * dx, def->speed * dy);
+        }
         break;
     }
     case FO_SHOT_ROCKET:
