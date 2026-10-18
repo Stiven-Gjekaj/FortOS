@@ -301,3 +301,42 @@ FO_TEST(testWorldDoorSounds) {
     FO_EQUAL_INT(soundCount(world, "spawndoors_close"), 1);
     fo_world_free(world);
 }
+
+static int effectCount(const FOWorld *world, const char *name) {
+    int n = 0;
+    for (int i = 0; i < world->event_count; i++) {
+        if (world->events[i].kind == FO_EVENT_EFFECT && strcmp(world->events[i].name, name) == 0) n++;
+    }
+    return n;
+}
+
+FO_TEST(testWorldLandingOnWideGroundMakesAPoof) {
+    FOWorld *world = newWorld(nil);
+    FOPlayer *p = standingPlayer(world, FO_TEAM_BLU, FO_CLASS_SOLDIER, 20);
+    FO_EXPECT(fo_player_jump(world, p));
+    int poofs = 0;
+    for (int i = 0; i < 120; i++) {
+        run(world, 1);
+        poofs += effectCount(world, "poof_straight");
+    }
+    FO_EQUAL_INT(poofs, 1);
+    fo_world_free(world);
+}
+
+FO_TEST(testWorldLandingOnANarrowBoxMakesNoPoof) {
+    // A box 2 m wide at x 69 to 71 m, with its top at y 5 m.
+    FOWorld *world = newWorld(@"  <object id=\"9\" x=\"690\" y=\"250\" width=\"20\" height=\"10\"/>\n");
+    FOPlayer *p = standingPlayer(world, FO_TEAM_BLU, FO_CLASS_SOLDIER, 20);
+    fo_phys_body_set_transform(p->obj.body, 70, 7, 0);
+    fo_phys_body_set_awake(p->obj.body, 1);
+    int poofs = 0;
+    for (int i = 0; i < 90; i++) {
+        run(world, 1);
+        poofs += effectCount(world, "poof_straight");
+    }
+    float x, y;
+    fo_player_position(p, &x, &y);
+    FO_EXPECT(y > 5.5f);
+    FO_EQUAL_INT(poofs, 0);
+    fo_world_free(world);
+}

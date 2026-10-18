@@ -426,11 +426,47 @@ static float ground_angle(const FOPlayer *p) {
 }
 
 // Player.a(Fixture, Object) (xn.java:1329-1370).
+typedef struct {
+    int hit;
+    float x, y;
+} FOGroundHit;
+
+// xo.java: the first map ground on the ray.
+static float ray_ground(void *context, FOPhysFixture *fixture, float px, float py, float nx, float ny, float fraction) {
+    (void)nx;
+    (void)ny;
+    (void)fraction;
+    FOObj *o = fo_world_fixture_obj(fixture);
+    if (!o || o->kind != FO_OBJ_GROUND) return 1.0f;
+    FOGroundHit *h = context;
+    h->hit = 1;
+    h->x = px;
+    h->y = py;
+    return 0.0f;
+}
+
+// Player.a(boolean, boolean) (xn.java:648-681): a landing on flat ground
+// makes a poof of dust, when the ground goes 1.2 m to each side of the
+// point under the player. The poofs for a slope never show, because the
+// test asks for flat ground first.
+static void landing_poof(FOWorld *world, FOPlayer *p, FOObj *ground) {
+    if (!p->alive || fo_player_waiting(p)) return;
+    float x, y;
+    fo_player_position(p, &x, &y);
+    FOGroundHit h = {0, 0, 0};
+    fo_phys_ray(world->phys, x, y, x, y - 2.0f, ray_ground, &h);
+    if (!h.hit || !ground->body) return;
+    if (!fo_phys_body_test_point(ground->body, h.x - 1.2f, h.y - 0.05f)) return;
+    if (!fo_phys_body_test_point(ground->body, h.x + 1.2f, h.y - 0.05f)) return;
+    fo_world_event(world, FO_EVENT_EFFECT, "poof_straight", h.x, h.y);
+}
+
 static void player_contact_begin(FOWorld *world, FOPlayer *p, FOPhysFixture *fixture, FOObj *other) {
     unsigned short cat = fo_phys_fixture_category(fixture);
     if (cat == FO_CAT_FOOT) {
         int wasInAir = p->foot.count == 0;
         touch_add(&p->foot, other);
+        if (wasInAir && fabsf(fo_angle_norm(obj_angle(other))) < 1.0f) landing_poof(world, p, other);
         // a(z, z2): the landing resets the double jump.
         if (wasInAir) p->landTime = world->now;
         p->doubleJumpReady = 1;
