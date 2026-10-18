@@ -140,6 +140,24 @@ FO_TEST(testKothAttackerOnTheOwnedPointHoldsTheObjective) {
     fo_world_free(world);
 }
 
+FO_TEST(testPlayersStopAtTheEndOfARound) {
+    FOWorld *world = newWorld(nil, kothArea);
+    fo_world_koth(world);
+    FOPlayer *p = playerAt(world, 1, FO_TEAM_RED, FO_CLASS_SCOUT, 20);
+    run(world, 0.5f);
+    p->move = FO_MOVE_RIGHT;
+    run(world, 0.5f);
+    float vx, vy;
+    fo_player_velocity(p, &vx, &vy);
+    FO_EXPECT(vx > 5.0f);
+    world->mode.redTimer = 0;
+    run(world, 0.1f);
+    fo_player_velocity(p, &vx, &vy);
+    FO_EXPECT(vx == 0.0f);
+    FO_EQUAL_INT(p->move, FO_MOVE_STOP);
+    fo_world_free(world);
+}
+
 FO_TEST(testKothRoundEndsAndANewRoundStartsAfter15Seconds) {
     FOWorld *world = newWorld(nil, kothArea);
     fo_world_koth(world);

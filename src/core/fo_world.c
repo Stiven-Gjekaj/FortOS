@@ -462,6 +462,9 @@ static int recently_shot(const FOWorld *world, const FOPlayer *p) {
 
 static void player_move(FOWorld *world, FOPlayer *p) {
     FOPhysBody *body = p->obj.body;
+    // Player.h(float) (xn.java:553-555): the player stops at the end of a
+    // round and while the bomb is down.
+    if (fo_mode_bomb_down(world) || fo_mode_over(world)) p->move = FO_MOVE_STOP;
     float speed = fo_class_speed(p->cls);
     const FOWeapon *w = &p->weapon;
     if (w->def && w->angle != 0 && w->def->whileAim != 1.0f) {
