@@ -124,11 +124,28 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   bot, and the friction of the ground stops it. FortOS skips the walk of
   the player in that frame. The same is true for a bot at the end of a
   round.
-- **Quit goes to the single player screen.** The original goes to the
-  main menu, which comes in 0.8. The single player screen has no back
-  button until then.
-- **The characters of the class dialog have no hats.** The hats come with
-  the items in 0.8.
+- **FortOS has no online parts.** The main menu has single player, items,
+  and credits. It has no multiplayer, no leaderboard, no achievements,
+  and no quit button, as on iOS. The items screen has no store, no bag,
+  and no free items, and the item screen of a class shows no price. The
+  settings have no notifications. The dialogs that ask for a rating, for
+  notifications, for a daily reward, or for a discount are not in FortOS.
+  Reason: FortOS is offline, and the player owns all the items.
+- **The settings file is next to the APK**, at
+  `/var/mobile/Media/FortOS/FortOS.prefs`, with one `key=value` line for
+  each choice. The places of the controls are in UI units, not in pixels.
+  The original keeps the places as JSON in its preferences. Reason: a
+  file that the player can see and remove, and a layout that fits each
+  screen.
+- **The language is the language of the interface of the device**, and the
+  country is the country of its region settings. The original takes both
+  from the default Java locale. Japanese and Korean use the font of the
+  original for all the texts.
+- **The splash plays its sound when the sound is ready.** The original
+  decodes `splash_hit` before the splash. FortOS decodes it first on the
+  thread of the sounds, a few frames after the start.
+- **The fallen hat keeps the polygons of the hat when the player looks to
+  the left**, as in the original. Only the picture turns.
 
 - **The phone decodes the sounds of the APK.** FortOS uses stb_vorbis to
   read the OGG files, and mixes them in software into one RemoteIO output
@@ -172,6 +189,10 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
 - The pan of a sound compares its angle with the angle of a zero vector.
   So a sound above or under the ear is on the left, and a sound at the
   side of the ear is in the middle (ala.java).
+- Only the bots named gintrux69, morlicando, "bot gintas", and "bot lukas"
+  wear a hat (zm.java:40-47).
+- An item title and its description are in lower case
+  (aao.java:150). The fonts of the Latin texts have no capital letters.
 - On the round-over dialog, the winners run to the side of their own
   fridge when BLU wins, and to the other side when RED wins
   (ajl.java:274-279).
