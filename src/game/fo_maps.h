@@ -39,6 +39,9 @@ void fo_map_draw_back(const FOMap *map, const FOAtlasTextures *sprites, float ca
 
 // Draws the parts in front of the players: the spawn doors and the fronts
 // of the spawn rooms.
+// Draws the spawn doors, in front of the players.
+void fo_map_draw_doors(const FOMap *map, const FOAtlasTextures *sprites);
+
 void fo_map_draw_front(const FOMap *map, const FOAtlasTextures *sprites, float left, float bottom, float right,
                        float top);
 

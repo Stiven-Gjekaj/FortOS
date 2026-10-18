@@ -142,11 +142,15 @@ void fo_map_draw_back(const FOMap *map, const FOAtlasTextures *sprites, float ca
     (void)sprites;
 }
 
-void fo_map_draw_front(const FOMap *map, const FOAtlasTextures *sprites, float left, float bottom, float right,
-                       float top) {
+void fo_map_draw_doors(const FOMap *map, const FOAtlasTextures *sprites) {
     // The doors are in front of the players (spawnDoors in wz.java).
     fo_gfx_depth(FO_DEPTH_OFF, 0);
     draw_doors(map, sprites);
+}
+
+void fo_map_draw_front(const FOMap *map, const FOAtlasTextures *sprites, float left, float bottom, float right,
+                       float top) {
+    (void)sprites;
     if (!kMaps[map->id].front) return;
     for (int pass = FO_PASS_OPAQUE; pass <= FO_PASS_BLEND; pass++) {
         draw_layer(map, "spawnbasesfront", pass, 0, 0, Z_FRONT, left, bottom, right, top);
