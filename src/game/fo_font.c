@@ -16,15 +16,26 @@ int fo_font_load(FOFont *font, const char *path) {
     char page[256];
     snprintf(page, sizeof(page), "%.*s%s", slash ? (int)(slash - path + 1) : 0, path, font->fnt.page_file);
     font->page = fo_assets_texture(page);
+    font->size = 1;
     return font->page.id != 0;
 }
 
+FOFont fo_font_sized(const FOFont *font, float size) {
+    FOFont copy = *font;
+    copy.size = size;
+    return copy;
+}
+
+static float sized(const FOFont *font, float scale) {
+    return font->size > 0 ? scale * font->size : scale;
+}
+
 float fo_font_width(const FOFont *font, const char *text, float scale) {
-    return fo_fnt_width(&font->fnt, text) * scale;
+    return fo_fnt_width(&font->fnt, text) * sized(font, scale);
 }
 
 float fo_font_line(const FOFont *font, float scale) {
-    return font->fnt.line_height * scale;
+    return font->fnt.line_height * sized(font, scale);
 }
 
 // The width of the line that starts at text, up to '\n' or the end.
@@ -40,6 +51,7 @@ static float line_width(const FOFont *font, const char *text, float scale) {
 void fo_font_draw(const FOFont *font, const char *text, float x, float y, float scale, FOColor color, int align) {
     const FOTexture *t = &font->page;
     if (!t->id) return;
+    scale = sized(font, scale);
     const char *line = text;
     float top = y;
     while (line) {

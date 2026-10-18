@@ -10,6 +10,7 @@
 typedef struct {
     FOFnt fnt;
     FOTexture page;
+    float size;      // Multiplies the scale of each call: 1 for the pixel fonts.
 } FOFont;
 
 enum {
@@ -20,6 +21,10 @@ enum {
 
 // Reads the font at path, for example "fonts/pixel12.fnt", and its page.
 int fo_font_load(FOFont *font, const char *path);
+
+// A copy of font that draws at size times the scale. The copy shares the
+// page of font. Japanese and Korean use one font at four sizes.
+FOFont fo_font_sized(const FOFont *font, float size);
 
 // The width of text at scale, where scale is the size of one font pixel.
 float fo_font_width(const FOFont *font, const char *text, float scale);
