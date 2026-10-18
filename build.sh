@@ -34,9 +34,24 @@ while [ $# -gt 0 ]; do
         *)
             # Put each object in build/obj, so that the source tree stays clean.
             obj="$ROOT/build/obj/$(echo "${1%.*}" | sed "s|^$ROOT/||; s|/|_|g").o"
-            # shellcheck disable=SC2086
-            clang -target armv7-apple-ios6.0 -isysroot "$SDK" -Wno-incompatible-sysroot \
-                -marm -fobjc-arc -Os -ffp-contract=off -Wall -Werror=unguarded-availability $CFLAGS -c "$1" -o "$obj"
+            case "$1" in
+                *.cpp)
+                    # The SDK has no C++ headers. src/physics/shim gives the
+                    # few parts that Box2D needs. An object that is newer
+                    # than its source is kept, because Box2D does not change.
+                    if [ ! -f "$obj" ] || [ "$1" -nt "$obj" ]; then
+                        # shellcheck disable=SC2086
+                        clang++ -target armv7-apple-ios6.0 -isysroot "$SDK" -Wno-incompatible-sysroot \
+                            -isystem "$ROOT/src/physics/shim" -nostdinc++ -fno-rtti -fno-exceptions -DFO_NO_CXX_RUNTIME \
+                            -marm -Os -ffp-contract=off $CFLAGS -c "$1" -o "$obj"
+                    fi
+                    ;;
+                *)
+                    # shellcheck disable=SC2086
+                    clang -target armv7-apple-ios6.0 -isysroot "$SDK" -Wno-incompatible-sysroot \
+                        -marm -fobjc-arc -Os -ffp-contract=off -Wall -Werror=unguarded-availability $CFLAGS -c "$1" -o "$obj"
+                    ;;
+            esac
             OBJS="$OBJS $obj"
             ;;
     esac

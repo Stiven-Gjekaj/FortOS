@@ -1,0 +1,5 @@
+// Box2D includes <memory> but uses nothing from it.
+#ifndef FO_SHIM_MEMORY
+#define FO_SHIM_MEMORY
+#include <new>
+#endif

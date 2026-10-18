@@ -1,0 +1,43 @@
+// std::sort, the only part of <algorithm> that Box2D uses. It is a heap
+// sort, which needs no memory and has no bad case.
+#ifndef FO_SHIM_ALGORITHM
+#define FO_SHIM_ALGORITHM
+
+namespace std {
+
+template <class T, class Less>
+void fo_sift_down(T *a, long start, long end, Less less) {
+    long root = start;
+    while (root * 2 + 1 <= end) {
+        long child = root * 2 + 1;
+        if (child + 1 <= end && less(a[child], a[child + 1])) child++;
+        if (!less(a[root], a[child])) return;
+        T t = a[root];
+        a[root] = a[child];
+        a[child] = t;
+        root = child;
+    }
+}
+
+template <class T, class Less>
+void sort(T *first, T *last, Less less) {
+    long n = last - first;
+    if (n < 2) return;
+    for (long start = (n - 2) / 2; start >= 0; start--) fo_sift_down(first, start, n - 1, less);
+    for (long end = n - 1; end > 0; end--) {
+        T t = first[0];
+        first[0] = first[end];
+        first[end] = t;
+        fo_sift_down(first, 0, end - 1, less);
+    }
+}
+
+template <class T>
+T max(T a, T b) { return a < b ? b : a; }
+
+template <class T>
+T min(T a, T b) { return b < a ? b : a; }
+
+}
+
+#endif
