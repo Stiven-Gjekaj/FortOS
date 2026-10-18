@@ -184,6 +184,16 @@ void fo_phys_body_set_mask(FOPhysBody *body, unsigned short category, unsigned s
     }
 }
 
+void fo_phys_body_set_filter(FOPhysBody *body, unsigned short match, unsigned short category, unsigned short mask) {
+    for (b2Fixture *f = B(body)->GetFixtureList(); f; f = f->GetNext()) {
+        b2Filter filter = f->GetFilterData();
+        if (filter.categoryBits != match) continue;
+        filter.categoryBits = category;
+        filter.maskBits = mask;
+        f->SetFilterData(filter);
+    }
+}
+
 FOPhysBody *fo_phys_fixture_body(const FOPhysFixture *fixture) {
     return reinterpret_cast<FOPhysBody *>(const_cast<b2Body *>(CF(fixture)->GetBody()));
 }

@@ -66,6 +66,8 @@ void fo_phys_body_set_active(FOPhysBody *body, int active);
 void fo_phys_body_apply_impulse(FOPhysBody *body, float ix, float iy);
 // Sets the mask of each fixture with the category cat.
 void fo_phys_body_set_mask(FOPhysBody *body, unsigned short category, unsigned short mask);
+// Gives each fixture with the category match the new category and mask.
+void fo_phys_body_set_filter(FOPhysBody *body, unsigned short match, unsigned short category, unsigned short mask);
 
 FOPhysBody *fo_phys_fixture_body(const FOPhysFixture *fixture);
 unsigned short fo_phys_fixture_category(const FOPhysFixture *fixture);
