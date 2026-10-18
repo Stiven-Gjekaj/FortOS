@@ -310,8 +310,53 @@ void fo_player_set_health(FOWorld *world, FOPlayer *p, float health) {
     if (health <= 0 && p->alive) fo_player_die(world, p);
 }
 
+// PlayerDeadBody.a(...) (xs.java): the body starts at the place and the
+// speed of the player.
+static void corpse_start(FOWorld *world, FOPlayer *p) {
+    FOCorpse *c = &p->corpse;
+    if (!c->obj.body) {
+        c->obj.kind = FO_OBJ_CORPSE;
+        c->obj.w = 0.45000002f;
+        c->obj.h = 1.9f;
+        c->obj.body = fo_phys_body_new(world->phys, FO_BODY_DYNAMIC, -5, -5, 0, &c->obj);
+        fo_phys_body_set_fixed_rotation(c->obj.body, 1);
+        FOFixtureDef box = {1.1f, 0.7f, 0, 0, FO_CAT_GROUND, 0};
+        fo_phys_box(c->obj.body, c->obj.w / 2, c->obj.h / 2, 0, 0, 0, &box);
+        FOFixtureDef foot = {0, 0.2f, 0, 0, FO_CAT_GROUND, 1};
+        fo_phys_box(c->obj.body, c->obj.w / 3, 0.3f, 0, -c->obj.h / 2, 0, &foot);
+    }
+    float x, y, vx, vy;
+    fo_player_position(p, &x, &y);
+    fo_player_velocity(p, &vx, &vy);
+    fo_phys_body_set_active(c->obj.body, 1);
+    fo_phys_body_set_transform(c->obj.body, x, y, 0);
+    fo_phys_body_set_velocity(c->obj.body, vx, vy);
+    fo_phys_body_set_awake(c->obj.body, 1);
+    c->active = 1;
+    c->start = world->now;
+    c->stop = 0;
+    c->turn = 0;
+    c->turnStart = 0;
+    c->turnTime = 1;
+    c->facingRight = p->facingRight;
+}
+
+// PlayerDeadBody.a(Fixture, Object): the landing. The body turns to the
+// slope until the last frame of the death animation.
+static void corpse_land(FOWorld *world, FOCorpse *c, FOObj *ground) {
+    c->stop = world->now;
+    float q = fo_angle_norm(fo_phys_body_angle(ground->body)) * 57.295776f;
+    if (q != 0.0f) c->turn = q * 0.017453292f > 0.017453292f ? q - 90.0f : 90.0f - fabsf(q);
+    c->turnStart = world->now;
+    // The frame now: 0.1 s for each, and frame 4 while the body moves.
+    int frame = (int)((world->now - c->start) / 100);
+    if (frame > 4) frame = 4;
+    c->turnTime = ((7 - 1) - frame) * 0.1f * 1000.0f;
+}
+
 void fo_player_die(FOWorld *world, FOPlayer *p) {
     if (!p->alive) return;
+    corpse_start(world, p);
     p->deathTime = world->now;
     p->alive = 0;
     p->health = 0;
@@ -544,6 +589,8 @@ static void dispatch_begins(FOWorld *world) {
         FOObj *oa = fo_world_fixture_obj(world->begins[i].a), *ob = fo_world_fixture_obj(world->begins[i].b);
         if (!oa || !ob) continue;
         fo_combat_contact(world, oa, ob, world->begins[i].px, world->begins[i].py);
+        if (oa->kind == FO_OBJ_CORPSE && ob->kind == FO_OBJ_GROUND) corpse_land(world, (FOCorpse *)oa, ob);
+        if (ob->kind == FO_OBJ_CORPSE && oa->kind == FO_OBJ_GROUND) corpse_land(world, (FOCorpse *)ob, oa);
         if (oa->kind == FO_OBJ_PLAYER) player_contact_begin(world, (FOPlayer *)oa, world->begins[i].a, ob);
         if (ob->kind == FO_OBJ_PLAYER) player_contact_begin(world, (FOPlayer *)ob, world->begins[i].b, oa);
     }
@@ -596,6 +643,13 @@ void fo_world_update(FOWorld *world, float dt) {
         if (world->players[i].used) player_update(world, &world->players[i], dt);
     }
     fo_combat_update(world, dt);
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        FOCorpse *c = &world->players[i].corpse;
+        if (c->active && world->now - c->start > 9000) {
+            c->active = 0;
+            fo_phys_body_set_active(c->obj.body, 0);
+        }
+    }
     map_update(world);
     for (int i = 0; i < world->door_count; i++) door_update(world, &world->doors[i], dt);
     server_update(world);

@@ -68,6 +68,7 @@ typedef enum {
     FO_OBJ_PLAYER,      // Player (xn)
     FO_OBJ_SENTRY,      // SentryGun (xu)
     FO_OBJ_BULLET,      // Bullet (xg)
+    FO_OBJ_CORPSE,      // PlayerDeadBody (xs)
 } FOObjKind;
 
 // The head of each object with a body. The user data of the body points
@@ -115,6 +116,19 @@ typedef struct {
     float angle;          // d: the aim in degrees from -180 to 180. 0 is no aim.
 } FOWeapon;
 
+// PlayerDeadBody (xs.java): the body falls after a death, lands, and
+// turns to the slope under it. It goes 9 s after the death.
+typedef struct {
+    FOObj obj;
+    int active;
+    long long start;         // o: the time of the death.
+    long long stop;          // p: the time of the landing, or 0.
+    float turn;              // r: the angle at the end of the turn, in degrees.
+    long long turnStart;     // s
+    float turnTime;          // t: ms of the turn.
+    int facingRight;         // n
+} FOCorpse;
+
 typedef struct FOPlayer {
     FOObj obj;
     int used;
@@ -139,6 +153,7 @@ typedef struct FOPlayer {
     FODamage damage[FO_DAMAGE_MAX];
     int killer;              // q: the id of the last killer.
     int healer;              // The id of the medic that heals the player, or 0.
+    FOCorpse corpse;
 } FOPlayer;
 
 // A projectile (Bullet, xg.java).

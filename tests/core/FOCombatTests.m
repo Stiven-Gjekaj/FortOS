@@ -207,3 +207,20 @@ FO_TEST(testCombatAimAngleWraps) {
     fo_player_set_aim(&p, 180);
     FO_EXPECT(fabsf(p.weapon.angle - 180) < 1e-4f);
 }
+
+FO_TEST(testCombatCorpseFallsAndGoes) {
+    FOWorld *world = fo_world_new(kFlat, 3);
+    FOPlayer *e = standing(world, 3, FO_TEAM_RED, FO_CLASS_SCOUT, 30);
+    fo_phys_body_set_transform(e->obj.body, 30, 8, 0);
+    fo_player_set_health(world, e, 0);
+    FO_EXPECT(e->corpse.active);
+    run(world, 120);
+    float x, y;
+    fo_phys_body_position(e->corpse.obj.body, &x, &y);
+    FO_EXPECT(e->corpse.stop > 0);
+    // The floor is at y 2 m, and the body is 1.9 m high.
+    FO_EXPECT(fabsf(y - 2.95f) < 0.1f);
+    run(world, 60 * 8);
+    FO_EXPECT(!e->corpse.active);
+    fo_world_free(world);
+}
