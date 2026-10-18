@@ -9,6 +9,7 @@
 
 #include "fo_phys.h"
 #include "fo_tmx.h"
+#include "fo_weapon.h"
 
 #define FO_MAX_PLAYERS 16
 #define FO_TOUCH_MAX 24
@@ -66,6 +67,7 @@ typedef enum {
     FO_OBJ_BARRIER,     // the wall of a spawn room for the other team
     FO_OBJ_PLAYER,      // Player (xn)
     FO_OBJ_SENTRY,      // SentryGun (xu)
+    FO_OBJ_BULLET,      // Bullet (xg)
 } FOObjKind;
 
 // The head of each object with a body. The user data of the body points
@@ -94,6 +96,25 @@ typedef struct {
     int open;
 } FODoor;
 
+// One entry of DamageHistoryHolder (acu.java, acv.java).
+typedef struct {
+    long long time;
+    float damage;
+    int attacker;
+    int item;
+    int used;
+} FODamage;
+
+#define FO_DAMAGE_MAX 32
+
+// The weapon that a player holds (Weapon, alz.java).
+typedef struct {
+    const FOWeaponDef *def;
+    float ammo;           // z
+    long long lastShot;   // c
+    float angle;          // d: the aim in degrees from -180 to 180. 0 is no aim.
+} FOWeapon;
+
 typedef struct FOPlayer {
     FOObj obj;
     int used;
@@ -107,13 +128,50 @@ typedef struct FOPlayer {
     long long jumpTime;      // Q: the time of the last jump.
     int doubleJumpReady;     // T: the rusher can jump in the air.
     int facingRight;         // az
-    float aim;               // The aim angle of the weapon in degrees. 0 is no aim.
     long long landTime;      // The time of the last landing, for the squat frame.
     int jumpSoundUp, jumpSoundDouble;  // an and ap: the jump sounds played.
     float lastVy;            // ao
     long long deathTime;     // B: the time of death, or 0.
     long long hurtTime;      // A: the time that the health last went down.
+    FOWeapon weapon;
+    int primaryItem;         // The item id of the weapon of the loadout, or 0.
+    int score;               // P
+    FODamage damage[FO_DAMAGE_MAX];
+    int killer;              // q: the id of the last killer.
+    int healer;              // The id of the medic that heals the player, or 0.
 } FOPlayer;
+
+// A projectile (Bullet, xg.java).
+typedef struct {
+    FOObj obj;
+    int active;              // o()
+    int owner;               // The id of the player that shot it.
+    short team;
+    const FOWeaponDef *def;
+    long long spawn;         // p
+    int damage;              // n
+    float angle;
+} FOBullet;
+
+#define FO_MAX_BULLETS 160
+
+// The events of one frame, for the sounds, the effects, and the kill feed.
+typedef enum {
+    FO_EVENT_SOUND,          // name at (x, y)
+    FO_EVENT_EFFECT,         // name at (x, y). flip is 1 or -1.
+    FO_EVENT_KILL,           // a kills b with item, c assists.
+    FO_EVENT_HIT,            // a hits b for value damage.
+} FOEventKind;
+
+typedef struct {
+    FOEventKind kind;
+    char name[32];
+    float x, y, value;
+    int flip;
+    int a, b, c, item;
+} FOEvent;
+
+#define FO_MAX_EVENTS 128
 
 #define FO_MAX_DOORS 4
 #define FO_MAX_GROUND (FO_TMX_MAX_BOXES)
@@ -139,6 +197,9 @@ typedef struct FOWorld {
     int begin_count;
     // The events of the last frame, for the sounds.
     int jumps;
+    FOBullet bullets[FO_MAX_BULLETS];
+    FOEvent events[FO_MAX_EVENTS];
+    int event_count;
 } FOWorld;
 
 // Makes the world of a map from the text of its .tmx file. Returns NULL
@@ -173,6 +234,29 @@ void fo_player_die(FOWorld *world, FOPlayer *player);
 
 // Player.E(): the player is dead and waits for the respawn.
 int fo_player_waiting(const FOPlayer *player);
+
+// Sets the aim of the weapon in degrees, as Weapon.c(float): the angle
+// goes into (-180, 180]. 0 is no aim.
+void fo_player_set_aim(FOPlayer *player, float degrees);
+
+// Weapon.d(): the weapon can shoot now. In single player the world is the
+// authority, and the original then does not test the ammo.
+int fo_player_can_shoot(FOWorld *world, const FOPlayer *player);
+
+// Player.a(float, boolean) (xn.java:742-759): shoots in the direction of
+// angle radians. Returns 1 when a shot goes out.
+int fo_player_shoot(FOWorld *world, FOPlayer *player, float angle);
+
+// The place where the projectiles start (Weapon.d(float)), for the aim in
+// degrees.
+void fo_player_muzzle(const FOPlayer *player, float degrees, float *x, float *y);
+
+// Player.a(alz, float) (xn.java:1297-1302): damage from the weapon of the
+// player with the id attacker.
+void fo_player_damage(FOWorld *world, FOPlayer *target, int attacker, int item, float damage);
+
+// Adds an event of the frame.
+void fo_world_event(FOWorld *world, FOEventKind kind, const char *name, float x, float y);
 
 // The jump of the input (Player.t, xn.java:705-724). Returns 1 when the
 // player jumps.

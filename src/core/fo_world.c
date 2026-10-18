@@ -1,6 +1,7 @@
 #include "fo_world.h"
 
 #include <math.h>
+#include "fo_world_private.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -71,7 +72,7 @@ static void touch_purge(FOTouchSet *set) {
     }
 }
 
-static FOObj *fixture_obj(FOPhysFixture *fixture) {
+FOObj *fo_world_fixture_obj(FOPhysFixture *fixture) {
     return (FOObj *)fo_phys_body_user(fo_phys_fixture_body(fixture));
 }
 
@@ -116,7 +117,7 @@ static void player_contact_end(FOPlayer *p, FOPhysFixture *fixture, FOObj *other
 
 static void on_end(void *context, FOPhysFixture *a, FOPhysFixture *b) {
     (void)context;
-    FOObj *oa = fixture_obj(a), *ob = fixture_obj(b);
+    FOObj *oa = fo_world_fixture_obj(a), *ob = fo_world_fixture_obj(b);
     if (oa && oa->kind == FO_OBJ_PLAYER && ob) player_contact_end((FOPlayer *)oa, a, ob);
     if (ob && ob->kind == FO_OBJ_PLAYER && oa) player_contact_end((FOPlayer *)ob, b, oa);
 }
@@ -291,6 +292,15 @@ void fo_world_spawn(FOWorld *world, FOPlayer *p, int cls) {
     p->health = fo_class_health(cls);
     p->alive = 1;
     p->deathTime = 0;
+    // The weapon of the class, full (xn.java:851-874).
+    const FOWeaponDef *def = fo_weapon_def(p->primaryItem);
+    if (!def || def->cls != cls) def = fo_weapon_default(cls);
+    p->weapon.def = def;
+    p->weapon.ammo = def ? def->ammo : 0;
+    p->weapon.angle = 0;
+    p->weapon.lastShot = 0;
+    p->healer = 0;
+    fo_combat_reset(p);
 }
 
 void fo_player_set_health(FOWorld *world, FOPlayer *p, float health) {
@@ -305,6 +315,8 @@ void fo_player_die(FOWorld *world, FOPlayer *p) {
     p->deathTime = world->now;
     p->alive = 0;
     p->health = 0;
+    fo_combat_kill(world, p);
+    if (p->weapon.def) p->weapon.ammo = p->weapon.def->ammo;
     // The original moves the body to (-5, -5), out of the map. FortOS also
     // turns the body off, so that it does not fall while the player waits.
     fo_phys_body_set_transform(p->obj.body, -5, -5, 0);
@@ -385,9 +397,21 @@ static void player_before_step(FOPlayer *p) {
 }
 
 // Player.h(float) (xn.java:547-641): the walk.
+// Weapon.r(): the weapon shot in the last 2 x l ms.
+static int recently_shot(const FOWorld *world, const FOPlayer *p) {
+    const FOWeapon *w = &p->weapon;
+    return w->def && (float)(world->now - w->lastShot) < w->def->window * 2.0f;
+}
+
 static void player_move(FOWorld *world, FOPlayer *p) {
     FOPhysBody *body = p->obj.body;
     float speed = fo_class_speed(p->cls);
+    const FOWeapon *w = &p->weapon;
+    if (w->def && w->angle != 0 && w->def->whileAim != 1.0f) {
+        speed *= w->def->whileAim;
+    } else if (w->def && recently_shot(world, p)) {
+        speed *= w->def->afterShot;
+    }
     float fA = ground_angle(p);
     float vx, vy;
     fo_player_velocity(p, &vx, &vy);
@@ -432,9 +456,22 @@ static void player_move(FOWorld *world, FOPlayer *p) {
             fo_phys_body_set_velocity(body, 0, vy);
         }
     }
-    if (p->aim == 0) {
+    if (p->weapon.angle == 0) {
         if (p->move == FO_MOVE_RIGHT) p->facingRight = 1;
         if (p->move == FO_MOVE_LEFT) p->facingRight = 0;
+    }
+}
+
+// Player.r() (xn.java:686-699): the side that the player faces.
+static void update_facing(FOPlayer *p) {
+    float vx, vy;
+    fo_player_velocity(p, &vx, &vy);
+    if (p->weapon.def && p->weapon.angle != 0) {
+        p->facingRight = p->weapon.angle <= 90.0f && p->weapon.angle >= -90.0f;
+    } else if (vx > 1.0f) {
+        p->facingRight = 1;
+    } else if (vx < -1.0f) {
+        p->facingRight = 0;
     }
 }
 
@@ -446,9 +483,13 @@ int fo_player_jump(FOWorld *world, FOPlayer *p) {
         p->doubleJumpReady = 0;
         air = 1;
     }
-    // Player.i(float) (xn.java:726-740): a jump against a steep slope
-    // loses the speed along x.
-    float speed = air ? 8.5f * 0.8f : 8.5f;
+    fo_player_launch(world, p, air ? 8.5f * 0.8f : 8.5f);
+    return 1;
+}
+
+// Player.i(float) (xn.java:726-740): a jump against a steep slope loses
+// the speed along x.
+void fo_player_launch(FOWorld *world, FOPlayer *p, float speed) {
     float fA = ground_angle(p);
     float vx, vy, keep = 0;
     fo_player_velocity(p, &vx, &vy);
@@ -460,7 +501,6 @@ int fo_player_jump(FOWorld *world, FOPlayer *p) {
     }
     fo_phys_body_set_velocity(p->obj.body, keep, speed);
     p->jumpTime = world->now;
-    return 1;
 }
 
 // The jump sounds (xn.java:529-544): one when a jump starts, and one for
@@ -490,6 +530,7 @@ static void player_update(FOWorld *world, FOPlayer *p, float dt) {
     touch_purge(&p->right);
     if (!p->alive) return;
     player_move(world, p);
+    update_facing(p);
     jump_sounds(world, p);
     // The vertical speed stays in [-20, 20] (xn.java:407).
     float vx, vy;
@@ -500,8 +541,9 @@ static void player_update(FOWorld *world, FOPlayer *p, float dt) {
 // GameWorld.s() (wt.java:96-140): the contacts of the last step.
 static void dispatch_begins(FOWorld *world) {
     for (int i = 0; i < world->begin_count; i++) {
-        FOObj *oa = fixture_obj(world->begins[i].a), *ob = fixture_obj(world->begins[i].b);
+        FOObj *oa = fo_world_fixture_obj(world->begins[i].a), *ob = fo_world_fixture_obj(world->begins[i].b);
         if (!oa || !ob) continue;
+        fo_combat_contact(world, oa, ob, world->begins[i].px, world->begins[i].py);
         if (oa->kind == FO_OBJ_PLAYER) player_contact_begin(world, (FOPlayer *)oa, world->begins[i].a, ob);
         if (ob->kind == FO_OBJ_PLAYER) player_contact_begin(world, (FOPlayer *)ob, world->begins[i].b, oa);
     }
@@ -539,6 +581,7 @@ void fo_world_update(FOWorld *world, float dt) {
     if (dt < 0) dt = 0;
     if (dt > 0.1f) dt = 0.1f;
     world->jumps = 0;
+    world->event_count = 0;
     world->now += (long long)(dt * 1000.0f + 0.5f);
     world->accumulator += dt;
     while (world->accumulator >= 0.016666668f) {
@@ -552,6 +595,7 @@ void fo_world_update(FOWorld *world, float dt) {
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
         if (world->players[i].used) player_update(world, &world->players[i], dt);
     }
+    fo_combat_update(world, dt);
     map_update(world);
     for (int i = 0; i < world->door_count; i++) door_update(world, &world->doors[i], dt);
     server_update(world);
