@@ -12,6 +12,7 @@ typedef struct {
 struct FOText {
     FOTextEntry *entries;
     int count;
+    FOText *parent;          // The bundle of the more general locale, or NULL.
 };
 
 // Adds the UTF-8 bytes of the code point c to out.
@@ -104,16 +105,26 @@ void fo_text_free(FOText *t) {
         free(t->entries[i].value);
     }
     free(t->entries);
+    fo_text_free(t->parent);
     free(t);
 }
 
 const char *fo_text_get(const FOText *t, const char *key) {
-    if (t) {
+    for (; t; t = t->parent) {
         for (int i = 0; i < t->count; i++) {
             if (strcmp(t->entries[i].key, key) == 0) return t->entries[i].value;
         }
     }
     return key;
+}
+
+void fo_text_set_parent(FOText *text, FOText *parent) {
+    if (!text) {
+        fo_text_free(parent);
+        return;
+    }
+    fo_text_free(text->parent);
+    text->parent = parent;
 }
 
 // Fills one {...} element, from after '{' to before its '}'.

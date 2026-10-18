@@ -14,6 +14,11 @@ typedef struct FOText FOText;
 FOText *fo_text_parse(const char *text);
 void fo_text_free(FOText *text);
 
+// Puts parent behind text, as the bundle of the more general locale of an
+// I18NBundle: a key that text does not have comes from parent. text owns
+// parent and frees it.
+void fo_text_set_parent(FOText *text, FOText *parent);
+
 // The value of the key, or the key itself when the file does not have it,
 // as the I18NBundle of libGDX shows a missing key.
 const char *fo_text_get(const FOText *text, const char *key);
