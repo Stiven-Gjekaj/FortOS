@@ -208,6 +208,12 @@ void fo_sound_update(const FOWorld *world, int localId, float listenerX, float l
     gRange = range > 0 ? range : 1;
     for (int i = 0; i < world->event_count; i++) {
         const FOEvent *e = &world->events[i];
+        // SpriteEffectsHandler.a (alb.java:307-309): each explosion effect
+        // plays the explosion sound.
+        if (e->kind == FO_EVENT_EFFECT && strcmp(e->name, "explosion") == 0) {
+            play_at("explosion", e->x, e->y, 0, 0, now);
+            continue;
+        }
         if (e->kind != FO_EVENT_SOUND) continue;
         if (is_flame_sound(e->name)) continue;
         if (is_global(e->name)) fo_sound_global(e->name);

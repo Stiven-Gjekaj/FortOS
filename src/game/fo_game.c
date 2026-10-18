@@ -15,6 +15,7 @@
 #include "fo_hud.h"
 #include "fo_screens.h"
 #include "fo_sound.h"
+#include "fo_effects.h"
 #include "fo_audio.h"
 #include "fo_look.h"
 #include "fo_maps.h"
@@ -109,6 +110,7 @@ static int start_map(FOMapId id, int play) {
     fo_mode_objective(G.map.world, &x, &y);
     fo_camera_init(&G.camera, G.width, G.height, x, y);
     fo_hud_map(fo_map_name(id));
+    fo_effects_reset(id, G.time);
     G.dialog = FO_DIALOG_TEAM;
     if (play) {
         fo_world_change_team(G.map.world, p, G.localTeam);
@@ -172,6 +174,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
     }
     fo_controls_layout(&G.controls, width, height);
     fo_look_init(&G.sprites);
+    fo_effects_init(&G.sprites);
     G.scopeMask = fo_assets_texture("textures/sniper_aim_alpha_mask.png");
     FOHudFonts fonts = {&G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21};
     fo_hud_init(&G.sprites, &fonts, G.texts, width, height);
@@ -318,6 +321,7 @@ static void draw_world(void) {
     FOWorld *world = G.map.world;
     float now = world->now / 1000.0f;
     fo_look_bomb(world);
+    fo_effects_draw_behind(world, G.time);
     // The layers of wz.java: the dead bodies, the projectiles, the players.
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
         if (world->players[i].used) fo_look_dead(world, &world->players[i], now);
@@ -336,7 +340,10 @@ static void draw_world(void) {
         if (p->used && p->alive) fo_look_player(world, p, &G.looks[i], now, world->accumulator, viewer);
     }
     fo_look_sentries(world, now);
+    fo_effects_draw_sentry(world, G.time);
     fo_hud_bomb_hint(world, (float)G.frameDt);
+    fo_map_draw_doors(&G.map, &G.sprites);
+    fo_effects_draw_top(world, G.time);
     fo_map_draw_front(&G.map, &G.sprites, left, bottom, right, top);
     draw_scope(viewer);
 }
@@ -399,6 +406,7 @@ void fo_game_frame(double dt) {
     fo_world_update(G.map.world, (float)dt);
     for (int i = 0; i < FO_MAX_PLAYERS; i++) G.looks[i].stateTime += (float)dt;
     fo_hud_events(G.map.world, FO_LOCAL_ID, (float)dt);
+    fo_effects_update(G.map.world, G.time);
     fo_map_update(&G.map, (float)dt);
     if (p && p->alive) {
         float x, y;
