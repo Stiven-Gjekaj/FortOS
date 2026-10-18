@@ -24,6 +24,10 @@ typedef struct {
 
 void fo_screens_init(const FOScreensSetup *setup);
 
+// The hat and the weapon of each class that the player chose. The class
+// dialog and the item screens show them (ait.java).
+void fo_screens_loadouts(const FOLoadout loadouts[10]);
+
 // The things that a tap on a screen asks for.
 typedef enum {
     FO_SCREEN_NONE = 0,

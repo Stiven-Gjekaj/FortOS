@@ -24,6 +24,9 @@ static short gClassTeam;
 static float gClassTime;        // The time since the last choice of a class.
 static int gClassFrom;
 static float gClassRandom[10];  // b of each ait: a random start of the idle animation.
+static FOLook gClassLooks[10];  // The frames of the hat of each character.
+
+static FOLoadout gLoadouts[10];
 
 static const char *const kMaps[3] = {"flag_egypt", "bomb_canyon", "gts_gantown"};
 static const char *const kMapImages[3] = {"flag_egypt_image", "bomb_canyon_image", "gts_gantown_image"};
@@ -35,6 +38,10 @@ void fo_screens_init(const FOScreensSetup *setup) {
     gU = gW / 281.0f;
     gV = gH / 150.0f;
     for (int i = 0; i < 10; i++) gClassRandom[i] = (float)((i * 7919) % 1000) / 1000.0f;
+}
+
+void fo_screens_loadouts(const FOLoadout loadouts[10]) {
+    memcpy(gLoadouts, loadouts, sizeof(gLoadouts));
 }
 
 // --- Drawing helpers ------------------------------------------------------
@@ -730,7 +737,8 @@ void fo_class_draw(const FOWorld *world, float dt) {
         else if (c == 8) off = -0.75f * u;
         float ax = l.px[c] - 4.5f * u, ay = l.py[c] - 9.5f * u;
         image(&shadow, ax + off + 4.5f * u - shadow.w * u / 2, ay - 2 * u, shadow.w * u, shadow.h * u);
-        fo_look_preview(world, c, team, l.px[c], l.py[c], u, gClassRandom[c] + world->now / 1000.0f, gW, gH);
+        fo_look_preview(world, c, team, gLoadouts[c].hat, gLoadouts[c].weapon, l.px[c], l.py[c], u,
+                        gClassRandom[c] + world->now / 1000.0f, gW, gH, &gClassLooks[c]);
     }
     // The border moves one unit from the old class, then onto the new one
     // after 0.15 s, and changes its colour each 0.3 s.

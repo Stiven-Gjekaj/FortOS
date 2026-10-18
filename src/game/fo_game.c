@@ -21,6 +21,7 @@
 #include "fo_look.h"
 #include "fo_maps.h"
 #include "fo_prefs.h"
+#include "fo_items.h"
 #include "fo_world.h"
 
 // The size of one art pixel in meters, as GANGFORT draws each region.
@@ -37,6 +38,8 @@ static struct {
     FOAtlasTextures splash;   // res/textures/splash.atlas, until the splash ends.
     int splashLoaded;
     FOPrefs prefs;            // The settings, next to the APK.
+    FOLoadout loadouts[10];   // The items of each class (items_equipment_settings_array).
+    int hatScores[FO_MAX_PLAYERS];  // s of GoldenHat: the score at the last golden drops.
     FOFont pixel4, pixel6, pixel12, pixel21;
     FOText *texts;
     FOMap map;
@@ -111,6 +114,23 @@ static int setting(const char *key) {
     return fo_prefs_int(&G.prefs, key, 1) != 0;
 }
 
+// The loadouts in the file: loadout_<class>_hat and loadout_<class>_weapon.
+static void loadouts_load(void) {
+    char key[48];
+    for (int c = 1; c <= 9; c++) {
+        snprintf(key, sizeof(key), "loadout_%d_hat", c);
+        int hat = fo_prefs_int(&G.prefs, key, 0);
+        snprintf(key, sizeof(key), "loadout_%d_weapon", c);
+        int weapon = fo_prefs_int(&G.prefs, key, 0);
+        // fo_player_set_loadout keeps only the items that the class can use.
+        FOPlayer check;
+        memset(&check, 0, sizeof(check));
+        fo_player_set_loadout(&check, c, hat, weapon);
+        G.loadouts[c] = check.loadout[c];
+    }
+    fo_screens_loadouts(G.loadouts);
+}
+
 static const char *const kSettingPrefs[FO_SETTING_COUNT] = {"killcam_enabled", "theme_music_enabled",
                                                             "vignette_enabled"};
 
@@ -152,6 +172,9 @@ static int start_map(FOMapId id, int play) {
     FOPlayer *p = fo_world_add_player(G.map.world, FO_LOCAL_ID, FO_TEAM_NONE);
     // SingleplayerClient (xa.java:35): the local player is "you".
     if (G.texts) snprintf(p->name, sizeof(p->name), "%s", fo_text_get(G.texts, "you"));
+    // SingleplayerGameController (xa.java:38-50): the items of each class.
+    for (int c = 1; c <= 9; c++) fo_player_set_loadout(p, c, G.loadouts[c].hat, G.loadouts[c].weapon);
+    memset(G.hatScores, 0, sizeof(G.hatScores));
     fo_bots_init(&G.bots, G.map.world, G.maxPlayers, FO_LOCAL_ID);
     G.botsJoined = 0;
     memset(G.looks, 0, sizeof(G.looks));
@@ -257,6 +280,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
                               &G.pixel21, G.texts,   width,
                               height};
     fo_screens_init(&screens);
+    loadouts_load();
     // SplashScreen: no music until the main menu (ahh.java).
     G.screen = FO_VIEW_SPLASH;
     music_fade(0.0f, 0);
@@ -412,13 +436,18 @@ static void draw_world(void) {
     // The original scales it by 0.1 and does not turn the y axis (akm.java:113-127).
     if (G.map.id == FO_MAP_GANTOWN) fo_look_koth(world, 58.2f, 20.55f);
     fo_look_bullets(world, now);
+    fo_look_drops(world);
     fo_look_pickups(world);
     FOPlayer *viewer = local_player();
     fo_look_beams(world);
     fo_look_health_bars(world, viewer);
+    fo_look_fallen_hats(world, now);
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
-        const FOPlayer *p = &world->players[i];
-        if (p->used && p->alive) fo_look_player(world, p, &G.looks[i], now, world->accumulator, viewer);
+        FOPlayer *p = &world->players[i];
+        if (!p->used || !p->alive) continue;
+        fo_look_player(world, p, &G.looks[i], now, world->accumulator, viewer);
+        // The hat falls from the place where the player was drawn.
+        if (G.looks[i].hatShown) fo_player_hat_place(p, G.looks[i].hatX, G.looks[i].hatY);
     }
     fo_look_sentries(world, now);
     fo_effects_draw_sentry(world, G.time);
@@ -492,6 +521,25 @@ static void killcam_update(FOPlayer *p) {
         fo_hud_killcam(NULL);
         fo_sound_fade(1.0f, 0.5f);
         music_fade(0.4f, 0.5f);
+    }
+}
+
+// GoldenHat.a(float) (abn.java:73-81): at each point of its player, a hat
+// in the view drops 3 to 10 golden pixels from its bottom.
+static void golden_drops(void) {
+    FOWorld *w = G.map.world;
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        FOPlayer *p = &w->players[i];
+        if (!p->used || !p->alive || p->hat != 1 || !G.looks[i].hatShown || p->score == G.hatScores[i]) continue;
+        G.hatScores[i] = p->score;
+        float hx = G.looks[i].hatX, hy = G.looks[i].hatY;
+        if (fabsf(hx - G.camera.shownX) > G.camera.viewW / 2 + 0.25f || fabsf(hy - G.camera.shownY) > G.camera.viewH / 2 + 0.25f)
+            continue;
+        const FOItem *it = fo_item(1);
+        int n = 3 + rand() % 8;
+        for (int k = 0; k < n; k++) {
+            fo_world_drops(w, hx - 0.3f + 0.6f * (float)rand() / (float)RAND_MAX, hy - it->h / 2, 1);
+        }
     }
 }
 
@@ -589,6 +637,7 @@ void fo_game_frame(double dt) {
     for (int i = 0; i < FO_MAX_PLAYERS; i++) G.looks[i].stateTime += (float)dt;
     fo_hud_events(G.map.world, FO_LOCAL_ID, (float)dt);
     fo_effects_update(G.map.world, G.time);
+    golden_drops();
     fo_ambient_update(G.map.world, G.camera.shownX - G.camera.viewW / 2, G.camera.shownY - G.camera.viewH / 2,
                       G.camera.viewW, G.camera.viewH, (float)dt, G.time);
     fo_map_update(&G.map, (float)dt);

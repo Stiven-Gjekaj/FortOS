@@ -18,6 +18,14 @@ typedef struct {
     float scopeArm;        // The angle of the arm while the rifle aims.
     int ownSpeed;          // vx replaces the speed of the body, for a runner.
     float vx;
+    // The hat (Hat, aan.java): its item, the start of its frames (q), the
+    // wait to the next play (p), the time of the last play, and the score
+    // at the last frame.
+    int hatItem;
+    float hatStart, hatWait, hatLast;
+    int hatScore;
+    int hatShown;          // The hat was on the head in the last draw, at
+    float hatX, hatY;      // this middle. The game gives it to the world.
 } FOLook;
 
 // A character that runs on the bottom bar of the round-over dialog
@@ -62,8 +70,19 @@ void fo_look_pickups(const FOWorld *world);
 
 // Draws a standing character of the class with its middle at the screen
 // point (cx, cy), for a menu. unit is the screen size of one art pixel.
-void fo_look_preview(const FOWorld *world, int cls, short team, float cx, float cy, float unit, float time, float width,
-                     float height);
+// hat and weapon are item ids, or 0 for no hat and the default weapon.
+// look keeps the frames of the hat, or is NULL.
+void fo_look_preview(const FOWorld *world, int cls, short team, int hat, int weapon, float cx, float cy, float unit,
+                     float time, float width, float height, FOLook *look);
+
+// Draws the hats that fell off the dead players, and the golden drops.
+void fo_look_fallen_hats(const FOWorld *world, float now);
+void fo_look_drops(const FOWorld *world);
+
+// Draws the picture of an item in ui.atlas with its middle at (cx, cy),
+// at the size of unit for each pixel. Returns 0 when the item has no
+// picture.
+int fo_look_item_icon(const FOAtlasTextures *ui, int item, float cx, float cy, float unit);
 
 // Draws a runner with its middle at the screen point (cx, cy). unit is the
 // screen size of one art pixel.

@@ -1,5 +1,8 @@
 #include "fo_look.h"
 
+#include <stdlib.h>
+#include "fo_items.h"
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -59,6 +62,8 @@ static FOSprite gWeapons[64][3];        // By item id and team.
 static FOSprite gFlashes[64];
 static FOSprite gBullets[64][6];
 static int gBulletFrames[64];
+static FOSprite gHatStill[64], gHatFrames[64][10];  // By item id.
+static FOSprite gDrop;
 
 // The region "team_class_part" when it is there, else "class_part": the
 // team prefix of each part changes from class to class.
@@ -88,6 +93,13 @@ static void init_weapon(int item, const char *sprite, const char *flash, const c
 
 void fo_look_init(const FOAtlasTextures *sprites) {
     gSprites = sprites;
+    for (int i = 0; i < FO_ITEM_COUNT; i++) {
+        const FOItem *it = &kFOItems[i];
+        if (it->kind != FO_ITEM_HAT || it->id >= 64) continue;
+        if (it->region) gHatStill[it->id] = fo_assets_sprite(sprites, it->region);
+        for (int k = 0; k < it->frameCount && k < 10; k++) gHatFrames[it->id][k] = fo_assets_sprite(sprites, it->frames[k]);
+    }
+    gDrop = fo_assets_sprite(sprites, "hat_goldendrop");
     for (int cls = 1; cls <= 9; cls++) {
         for (int t = 1; t <= 2; t++) {
             const char *team = t == 2 ? "red" : "blu";
@@ -264,11 +276,74 @@ static float arm_offset(const FOWeapon *w, long long nowMs) {
     }
 }
 
+// The timing of the frames of a hat. GoldenHat plays them each 3 to 7 s
+// (abn.java:65-71), ConfettiHat at each point (abk.java), and DiamondHat
+// each 1 to 3 s (abl.java). A new hat starts with its frames done.
+static float hat_random(float lo, float hi) {
+    return lo + (hi - lo) * (float)rand() / (float)RAND_MAX;
+}
+
+static void hat_update(const FOItem *it, FOLook *look, float now, int score) {
+    if (look->hatItem != it->id) {
+        look->hatItem = it->id;
+        look->hatStart = -1000;
+        look->hatWait = 0;
+        look->hatLast = -1000;
+        look->hatScore = score;
+    }
+    if (it->effect == FO_HAT_GOLDEN && now - look->hatStart >= look->hatWait) {
+        look->hatWait = hat_random(3, 7);
+        look->hatStart = now;
+    } else if (it->effect == FO_HAT_SCORE && score != look->hatScore) {
+        look->hatStart = now;
+    } else if (it->effect == FO_HAT_SPARKLE && now - look->hatLast >= look->hatWait) {
+        look->hatStart = now;
+        look->hatLast = now;
+        look->hatWait = hat_random(1, 3);
+    }
+    look->hatScore = score;
+}
+
+// Hat.a(Object, Color, ...) (aan.java:65-73): the frame while the frames
+// play or loop, else the still region.
+static const FOSprite *hat_sprite(const FOItem *it, const FOLook *look, float now) {
+    float r = now - look->hatStart;
+    if (it->frameCount > 0 && (it->loop || r < it->frameCount * it->frameTime)) {
+        int k = (int)floorf(r / it->frameTime);
+        k = it->loop ? k % it->frameCount : k;
+        if (k < 0) k = 0;
+        if (k >= it->frameCount) k = it->frameCount - 1;
+        return &gHatFrames[it->id][k];
+    }
+    return gHatStill[it->id].w ? &gHatStill[it->id] : NULL;
+}
+
+// Hat.a(float, float, ada, ...) (aan.java:57-63) with ada.a(float, float,
+// boolean) and ada.a(float, float) (ada.java:734-744): the middle of the
+// hat is o from the left of the head, and the height of the hat counts
+// from the middle of the player. legsH is the height of the legs frame.
+static void draw_hat(const FOItem *it, FOLook *look, float now, int cls, float X, float Y, int facing, float legsH,
+                     float bob, float idl, FOColor tint) {
+    const FOClassLook *l = &gLooks[cls][1];
+    const FOClassData *d = &kData[cls];
+    float hw = l->head.w * Z;
+    float ox = it->offsets[cls][0], oy = it->offsets[cls][1];
+    float x = X - hw / 2 + (facing ? d->ex * Z + ox : -d->ex * Z - ox + hw);
+    float y = legsH + (Y - it->h / 2) + bob + idl + d->ey * Z + oy;
+    look->hatShown = 1;
+    look->hatX = x;
+    look->hatY = y;
+    const FOSprite *s = hat_sprite(it, look, now);
+    if (!s || !s->w) return;
+    float w = s->w * Z, h = s->h * Z;
+    fo_gfx_draw(s, x - w / 2, y - h / 2, w, h, w / 2, h / 2, 0, !facing, tint);
+}
+
 // PlayerRenderData.a(...) (ada.java:665-732): the parts of one player,
 // as the class cls of the team. f5 is the time of the start of a disguise,
 // or -1.
 static void draw_main(const FOWorld *world, const FOPlayer *p, FOLook *look, float now, float X, float Y, int cls,
-                      int team, const FOWeapon *w, FOColor tint, float f5) {
+                      int team, const FOWeapon *w, int hat, FOColor tint, float f5) {
     if (cls < 1 || cls > 9 || (team != 1 && team != 2)) return;
     const FOClassLook *l = &gLooks[cls][team];
     const FOClassData *d = &kData[cls];
@@ -356,6 +431,13 @@ static void draw_main(const FOWorld *world, const FOPlayer *p, FOLook *look, flo
         float w = l->bodytop.w * Z, h = l->bodytop.h * Z;
         fo_gfx_draw(&l->bodytop, X - 0.25f + s * 1 * Z, Y0 + 12 * Z + bobM + idl + xL, w, h, w / 2, h / 2, 0, s < 0,
                     tint);
+    }
+    // 5. The hat.
+    const FOItem *hatItem = hat ? fo_item(hat) : NULL;
+    look->hatShown = 0;
+    if (hatItem && hatItem->kind == FO_ITEM_HAT && hatItem->id < 64) {
+        hat_update(hatItem, look, now, p->score);
+        draw_hat(hatItem, look, now, cls, X, Y, p->facingRight, lh, bobM, idl, tint);
     }
     // 6. The smoke of the cigarette of the spy: 0.5 s, each 2.5 s.
     if (cls == FO_CLASS_SPY && f5 < 0) {
@@ -482,6 +564,19 @@ static void draw_backstab(const FOWorld *world, const FOPlayer *p, FOLook *look,
     }
     look->S = -1;
     look->D = 0;
+    // The hat moves with the frames of the stab (ada.java:861-885).
+    const FOItem *hat = p->hat ? fo_item(p->hat) : NULL;
+    look->hatShown = 0;
+    if (hat && hat->kind == FO_ITEM_HAT && hat->id < 64) {
+        float f10 = 0, f11 = 0;
+        if (idx == 5) f11 = -Z;
+        else if (idx == 6 || idx == 9) f11 = Z;
+        else if (idx == 7 || idx == 8) f10 = -Z, f11 = 3 * Z;
+        float f13 = p->facingRight ? f11 : -f11;
+        hat_update(hat, look, now, p->score);
+        draw_hat(hat, look, now, FO_CLASS_SPY, bx + f13, by + f10, p->facingRight, gLooks[FO_CLASS_SPY][p->team].idle.h * Z,
+                 0, 0, tint);
+    }
     (void)world;
 }
 
@@ -503,17 +598,19 @@ void fo_look_player(const FOWorld *world, const FOPlayer *p, FOLook *look, float
         draw_backstab(world, p, look, now, tint);
     } else if (p->cls == FO_CLASS_SPY && p->disguise.active && since > 1.0f) {
         if (viewer && viewer->team == p->team && viewer->id != p->id) {
-            draw_main(world, p, look, now, X, Y, p->cls, p->team, &p->weapon, tint, -1);
+            draw_main(world, p, look, now, X, Y, p->cls, p->team, &p->weapon, p->hat, tint, -1);
         } else {
             // The enemies see the target: its class, its team, and its weapon.
             const FOPlayer *target = fo_world_player((FOWorld *)world, p->disguise.target);
             FOWeapon w = p->weapon;
             w.def = target && target->cls == p->disguise.cls ? target->weapon.def : fo_weapon_default(p->disguise.cls);
-            draw_main(world, p, look, now, X, Y, p->disguise.cls, p->disguise.team, &w, tint, -1);
+            // MockedSpyPlayer (xn.java:1127-1130): the items of the target in its class.
+            int hat = target ? target->loadout[p->disguise.cls].hat : 0;
+            draw_main(world, p, look, now, X, Y, p->disguise.cls, p->disguise.team, &w, hat, tint, -1);
         }
     } else {
         float f5 = p->disguise.active && since < 0.5f ? since : -1;
-        draw_main(world, p, look, now, X, Y, p->cls, p->team, &p->weapon, tint, f5);
+        draw_main(world, p, look, now, X, Y, p->cls, p->team, &p->weapon, p->hat, tint, f5);
     }
     // The smoke of a disguise, from 0.5 s to 1.4 s.
     if (p->disguise.active && since > 0.5f && since - 0.5f < 0.9f) {
@@ -776,8 +873,8 @@ void fo_look_koth(const FOWorld *world, float x, float y) {
 // on a menu, with its middle at the screen point (cx, cy). unit is the
 // size of one art pixel on the screen. width and height are the size of
 // the screen, for the view.
-void fo_look_preview(const FOWorld *world, int cls, short team, float cx, float cy, float unit, float time, float width,
-                     float height) {
+void fo_look_preview(const FOWorld *world, int cls, short team, int hat, int weapon, float cx, float cy, float unit,
+                     float time, float width, float height, FOLook *keep) {
     if (cls < 1 || cls > 9 || unit <= 0) return;
     FOPlayer p;
     memset(&p, 0, sizeof(p));
@@ -790,14 +887,16 @@ void fo_look_preview(const FOWorld *world, int cls, short team, float cx, float 
     p.foot.count = 1;
     p.foot.ground = 1;
     p.landTime = -100000;
-    p.weapon.def = fo_weapon_default(cls);
-    FOLook look;
-    memset(&look, 0, sizeof(look));
-    look.stateTime = time;
+    const FOWeaponDef *def = weapon ? fo_weapon_def(weapon) : NULL;
+    p.weapon.def = def && def->cls == cls ? def : fo_weapon_default(cls);
+    FOLook own;
+    FOLook *look = keep ? keep : &own;
+    if (!keep) memset(&own, 0, sizeof(own));
+    look->stateTime = time;
     // One meter is ten art pixels, so the view puts (0, 0) at (cx, cy).
     float m = 10.0f * unit;
     fo_gfx_view(-cx / m, -cy / m, (width - cx) / m, (height - cy) / m);
-    draw_main(world, &p, &look, time, 0, 0, cls, team, &p.weapon, FO_WHITE, -1);
+    draw_main(world, &p, look, time, 0, 0, cls, team, &p.weapon, hat, FO_WHITE, -1);
     fo_gfx_view(0, 0, width, height);
 }
 
@@ -832,7 +931,7 @@ void fo_look_runner(const FOWorld *world, const FORunner *r, FOLook *look, float
     if (!r->armsUp) {
         FOPlayer p;
         runner_player(world, r, &p);
-        draw_main(world, &p, look, look->stateTime, 0, 0, r->cls, r->team, &p.weapon, FO_WHITE, -1);
+        draw_main(world, &p, look, look->stateTime, 0, 0, r->cls, r->team, &p.weapon, 0, FO_WHITE, -1);
     } else {
         // RoundOverDialog.a.a(SpriteBatch) (ajl.java:732-747): the run frames
         // of the legs, and the arms over the head on top of them.
@@ -886,4 +985,53 @@ void fo_look_runner_shot(int cls, float x, float y, float angle, float age, floa
     if (!s->w) return;
     float w = s->w * unit, h = s->h * unit;
     fo_gfx_draw(s, x, y, w, h, w / 2, h / 2, angle, 0, FO_WHITE);
+}
+
+// Hat.a(alh) (aan.java:62-64): the hat of a dead player turns with its
+// body, and fades from 8.4 s to 9 s after the death.
+void fo_look_fallen_hats(const FOWorld *world, float now) {
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        const FOFallenHat *h = &world->players[i].fallenHat;
+        if (!h->active || !h->obj.body || h->item >= 64) continue;
+        const FOItem *it = fo_item(h->item);
+        if (!it) continue;
+        FOLook still;
+        memset(&still, 0, sizeof(still));
+        still.hatStart = -1000;
+        const FOSprite *s = hat_sprite(it, &still, now);
+        if (!s || !s->w) continue;
+        float x, y;
+        fo_phys_body_position(h->obj.body, &x, &y);
+        float a = fo_phys_body_angle(h->obj.body);
+        float k = (float)(world->now - (h->start + 8400)) / 600.0f;
+        k = k < 0 ? 0 : k > 1 ? 1 : k;
+        FOColor tint = {1, 1, 1, 1 - k};
+        float w = s->w * Z, hh = s->h * Z;
+        fo_gfx_draw(s, x - w / 2, y - hh / 2, w, hh, w / 2, hh / 2, a, !h->facingRight, tint);
+    }
+}
+
+// RandomPixelDrop.a(alh) (xt.java): the drop fades from 2.4 s to 3 s.
+void fo_look_drops(const FOWorld *world) {
+    if (!gDrop.w) return;
+    for (int i = 0; i < FO_MAX_DROPS; i++) {
+        const FODrop *d = &world->drops[i];
+        if (!d->active) continue;
+        float x, y;
+        fo_phys_body_position(d->obj.body, &x, &y);
+        float k = (float)(world->now - (d->start + 2400)) / 600.0f;
+        k = k < 0 ? 0 : k > 1 ? 1 : k;
+        FOColor tint = {1, 1, 1, 1 - k};
+        fo_gfx_draw(&gDrop, x - 0.05f, y - 0.05f, 0.1f, 0.1f, 0.05f, 0.05f, fo_phys_body_angle(d->obj.body), 0, tint);
+    }
+}
+
+int fo_look_item_icon(const FOAtlasTextures *ui, int item, float cx, float cy, float unit) {
+    const FOItem *it = fo_item(item);
+    if (!it || !it->icon) return 0;
+    FOSprite s = fo_assets_sprite(ui, it->icon);
+    if (!s.w) return 0;
+    float w = s.w * unit, h = s.h * unit;
+    fo_gfx_draw(&s, cx - w / 2, cy - h / 2, w, h, 0, 0, 0, 0, FO_WHITE);
+    return 1;
 }
