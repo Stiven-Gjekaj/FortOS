@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.0 (2026-10-18)
+
+- The splash, the main menu, and the credits of GANGFORT.
+- The settings: the kill cam, the theme music, and the vignette.
+- The control setup: drag each control to a new place, the layout with
+  two sticks or with the arrows and the jump button, and a reset.
+- The 34 hats and the 5 weapons of the store, all owned:
+  - the items screen with the nine characters and their items,
+  - the item screen of each class, with a list that scrolls,
+  - the hats on the players, in the class dialog, and on the head of a
+    disguised agent,
+  - a hat falls off at a death and turns on the ground,
+  - the golden hat drops golden pixels at each point, the confetti hat
+    plays at each point, and the diamond hat sparkles.
+- The bots of the makers wear their hats, as in GANGFORT.
+- A file next to the APK keeps the settings, the controls, and the items
+  of each class.
+- The texts in English, German, Spanish, Japanese, and Korean, with the
+  fonts of GANGFORT for Japanese and Korean.
+- The screen stays on while FortOS runs.
+
 ## 0.7.0 (2026-10-18)
 
 - The sounds and the music of GANGFORT, decoded on the phone from the
