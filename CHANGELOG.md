@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 (2026-10-18)
+
+- The players are drawn from their parts as in GANGFORT: the legs with
+  the run, walk, jump, and squat frames, the body, the head, the weapon,
+  and the arm that turns with the aim.
+- The right stick aims and shoots. A shot uses ammo, waits for the fire
+  interval of the weapon, and slows the walk for a short time.
+- The bullets, the rockets, and the rocket jump of the soldier, with the
+  damage of each weapon of GANGFORT.
+- The kill credit of GANGFORT: the player with the most damage in the
+  last 120 s gets the kill and 2 points, and the second gets the assist
+  and 1 point.
+- The dead body falls, lands, turns to the slope, and goes after 9 s.
+- The dead player drops the weapon. A touch gives 30 % of the ammo.
+- The fridge in the spawn room fills the health and the ammo.
+- The health bar, the ammo bar, the kill feed, and the respawn message.
+- The texts come from the APK.
+
 ## 0.2.0 (2026-10-18)
 
 - The physics of GANGFORT: Box2D 2.3.1 with the gravity, the scale, and
