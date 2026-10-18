@@ -30,4 +30,7 @@ void fo_look_dead(const FOWorld *world, const FOPlayer *p, float now);
 // Draws the projectiles in flight.
 void fo_look_bullets(const FOWorld *world, float now);
 
+// Draws the weapons that the dead players dropped.
+void fo_look_pickups(const FOWorld *world);
+
 #endif

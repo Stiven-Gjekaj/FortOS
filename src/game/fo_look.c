@@ -373,3 +373,16 @@ void fo_look_bullets(const FOWorld *world, float now) {
         fo_gfx_draw(s, px, py, w, h, w / 2, h / 2, b->angle, 0, tint);
     }
 }
+
+void fo_look_pickups(const FOWorld *world) {
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        const FOPickup *k = &world->players[i].pickup;
+        if (!k->active || !k->def || k->def->item >= 64) continue;
+        const FOSprite *s = &gWeapons[k->def->item][k->team == FO_TEAM_RED ? 2 : 1];
+        if (!s->w) continue;
+        float x, y;
+        fo_phys_body_position(k->obj.body, &x, &y);
+        float w = s->w * Z, h = s->h * Z;
+        fo_gfx_draw(s, x - w / 2, y - h / 2, w, h, w / 2, h / 2, fo_phys_body_angle(k->obj.body), 0, FO_WHITE);
+    }
+}
