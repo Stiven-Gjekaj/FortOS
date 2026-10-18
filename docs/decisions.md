@@ -25,17 +25,43 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
 - **FortOS does not decrypt the iOS binary.**
 - **The APK is in `reference/`, and git does not track `reference/`.** No
   file of GANGFORT goes into the repository.
+- **The APK has an offline mode with bots.** Single player starts a local
+  game server and adds bots. The bots use waypoint graphs that the code
+  holds for each map, a path search, and one brain for each kind of class.
+  FortOS ports this code. It does not make new bots.
+- **The rules of single player are the rules of FortOS.** In single
+  player, the client is the authority for the damage, the deaths, the
+  kill credit, and the game modes. FortOS ports that code.
+- **The odd rules of the original stay.** For example, a bot that changes
+  its class outside its spawn room dies, and a capture in capture the flag
+  gives 2 points to each BLU player. Reason: the original is the
+  reference. A change goes into this file with its reason.
+
+## The world
+
+- **The physics is Box2D 2.3, in C++.** Reason: GANGFORT uses Box2D 2.3
+  through libGDX. The same engine gives the same jumps, slides, and
+  collisions. The game core calls it through a small C interface.
+- **The view width is the view width of the original**, 22.1875 m.
+  Reason: a player then sees the same part of the map as in the original.
+  The art is drawn with nearest filtering.
+- **1.0 has the 3 maps of single player.** `ctf_egypt` is in the APK, but
+  the original never loads it and has no bot path for it.
 
 ## The assets of GANGFORT
 
 - **The repository is public and holds no file of GANGFORT.** The licence
   of the new code is MIT. The art, the sounds, the fonts, the maps, and the
   text of GANGFORT belong to their owners.
-- **The app reads the assets from the copy of the owner of the phone.** The
-  owner copies the `res/` directory of GANGFORT to
-  `/var/mobile/Media/FortOS/res/`. AFC tools and `scp` reach this
-  directory. Reason: the .deb then holds no file of GANGFORT, so it can go
-  to GitHub and to the Cydia repository like the other 4S apps.
+- **The app reads the assets from the APK of the owner of the phone.** The
+  owner copies the APK of GANGFORT 2.1 to
+  `/var/mobile/Media/FortOS/GANGFORT.apk`. AFC tools and `scp` reach this
+  directory. At the first start, the app unpacks `assets/res/` of the APK
+  into its cache. Reason: the .deb then holds no file of GANGFORT, so it
+  can go to GitHub and to the Cydia repository like the other 4S apps. The
+  APK is a zip file, as `Balatro.love` is for Balatro4S.
+- **The sounds are Ogg Vorbis, decoded on the phone with stb_vorbis.**
+  Reason: the APK holds Ogg files, and Balatro4S already uses stb_vorbis.
 - **The tests do not read the assets.** A test builds the state that it
   needs.
 
@@ -52,7 +78,8 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   `build.sh`, the iPhoneOS 9.3 SDK with `fix-sdk.sh`, clang for
   `armv7-apple-ios6.0`, ARM mode only, ARC for Objective-C.
 - **The game core is plain C99**, in `src/core`. It has no UIKit and no
-  OpenGL. The tests of the core operate on the Mac and on the phone.
+  OpenGL. The tests of the core operate on the Mac and on the phone. Box2D
+  is the one C++ part.
 
 ## Releases
 
