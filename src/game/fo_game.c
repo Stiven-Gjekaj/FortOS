@@ -218,7 +218,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
     G.scopeMask = fo_assets_texture("textures/sniper_aim_alpha_mask.png");
     FOHudFonts fonts = {&G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21};
     fo_hud_init(&G.sprites, &fonts, G.texts, width, height);
-    FOScreensSetup screens = {&G.sprites, &G.ui, &G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21, G.texts, width, height};
+    FOScreensSetup screens = {&G.sprites, &G.ui, NULL, &G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21, G.texts, width, height};
     fo_screens_init(&screens);
     open_single();
     fprintf(stderr, "start: %.3f s\n", wall_seconds() - start);

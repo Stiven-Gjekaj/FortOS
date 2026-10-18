@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "fo_look.h"
+#include "fo_sound.h"
 
 static FOScreensSetup S;
 static float gW, gH, gU, gV;
@@ -124,6 +125,239 @@ static void band(float y) {
     image(&s, gW / 2 - w / 2, y, w, 66 * gU);
 }
 
+// The back button of the menu screens: servers_back, 38 x 17 units, at
+// the top left (agv.java:58-65).
+static FOBox back_box(void) {
+    return (FOBox){9 * gU, gH - 17 * gU - 7 * gU, 38 * gU, 17 * gU};
+}
+
+static void back_draw(void) {
+    FOSprite s = sprite("servers_back");
+    FOBox b = back_box();
+    image(&s, b.x, b.y, b.w, b.h);
+}
+
+static int back_tap(float x, float y) {
+    FOBox b = back_box();
+    return inside(x, y, b.x, b.y, b.w, b.h);
+}
+
+// The background and the title of a menu screen (aii at 3 units from the
+// top).
+static void menu_screen(const char *title) {
+    fo_gfx_begin((int)gW, (int)gH, (FOColor){0.1484375f, 0.13671875f, 0.1328125f, 1});
+    fo_gfx_view(0, 0, gW, gH);
+    band(35.0f * gH / 150.0f);
+    if (title) big_label(title, gW / 2 - big_w(title) / 2, gH - big_h() - 3 * gU, 0xece4cc, 0xe1661e);
+}
+
+// --- SplashScreen (ahe.java) ----------------------------------------------
+
+static float gSplashTime;
+static int gSplashSound;
+
+void fo_splash_open(void) {
+    gSplashTime = 0;
+    gSplashSound = 0;
+}
+
+int fo_splash_draw(float dt) {
+    gSplashTime += dt;
+    fo_gfx_begin((int)gW, (int)gH, (FOColor){0.1484375f, 0.13671875f, 0.1328125f, 1});
+    fo_gfx_view(0, 0, gW, gH);
+    // splash_hit plays at the start. It decodes first, in a few frames.
+    if (!gSplashSound && gSplashTime < 0.5f && fo_sound_ready("splash_hit")) {
+        fo_sound_global("splash_hit");
+        gSplashSound = 1;
+    }
+    // The logo falls from the top to the middle in 0.1 s. Then its 11
+    // frames play at 12 each second, and the last frame stays.
+    float w = 373 * gU, h = 242 * gU;
+    float t = gSplashTime / 0.1f;
+    float y = gH + (gH / 2 - h / 2 - gH) * (t < 1 ? t : 1);
+    int frame = gSplashTime < 0.1f ? 0 : (int)floorf((gSplashTime - 0.1f) / 0.083333336f);
+    if (frame > 10) frame = 10;
+    if (S.splash) {
+        char name[16];
+        snprintf(name, sizeof(name), "splash%d", frame + 1);
+        FOSprite s = fo_assets_sprite(S.splash, name);
+        image(&s, gW / 2 - w / 2, y, w, h);
+    }
+    return gSplashTime >= 2.5f;
+}
+
+// --- MainMenuScreen (afk.java) --------------------------------------------
+
+// The buttons from the top: single player, items, and credits. The
+// original also has multiplayer, and quit on Android.
+#define FO_MAIN_BUTTONS 3
+static const char *const kMainKeys[FO_MAIN_BUTTONS] = {"single_player", "items", "credits"};
+
+typedef struct {
+    FOBox buttons[FO_MAIN_BUTTONS];
+    FOBox settings;
+    FOBox demoman;
+} FOMainLayout;
+
+static FOMainLayout main_layout(void) {
+    FOMainLayout l;
+    float u = gU, v = gV;
+    float w = 91 * u;
+    for (int i = 0; i < FO_MAIN_BUTTONS; i++) {
+        float need = button_fit(text(kMainKeys[i]), 84 * u);
+        if (need > w) w = need;
+    }
+    float bh = 18 * u, gap = 3 * v;
+    // The group is in the middle. The original adds 3 pixels, not 3 units,
+    // for each gap (afk.java:93).
+    float gx = gW / 2 - w / 2, gy = gH / 2 - (FO_MAIN_BUTTONS * 3.0f + FO_MAIN_BUTTONS * bh) / 2;
+    for (int i = 0; i < FO_MAIN_BUTTONS; i++) {
+        l.buttons[i] = (FOBox){gx, gy + (FO_MAIN_BUTTONS - 1 - i) * (bh + gap), w, bh};
+    }
+    float sw = 19 * u, sh = 17 * u, sm = 6 * u;
+    l.settings = (FOBox){gW - sw - sm, gH - sh - sm, sw, sh};
+    float dw = 243 * u, dh = 105 * dw / 243;
+    l.demoman = (FOBox){gW / 2 - dw / 2, gH / 2 - dh / 2 - 18 * v, dw, dh};
+    return l;
+}
+
+void fo_main_draw(void) {
+    menu_screen(NULL);
+    FOMainLayout l = main_layout();
+    FOSprite demoman = sprite("mainmenu_demoman");
+    image(&demoman, l.demoman.x, l.demoman.y, l.demoman.w, l.demoman.h);
+    for (int i = 0; i < FO_MAIN_BUTTONS; i++) button(text(kMainKeys[i]), l.buttons[i]);
+    FOSprite gear = ui("mainmenu_settings");
+    image(&gear, l.settings.x, l.settings.y, l.settings.w, l.settings.h);
+}
+
+FOScreenResult fo_main_tap(float x, float y) {
+    FOScreenResult r = {0};
+    FOMainLayout l = main_layout();
+    FOScreenAction actions[FO_MAIN_BUTTONS] = {FO_SCREEN_SINGLE, FO_SCREEN_ITEMS, FO_SCREEN_CREDITS};
+    for (int i = 0; i < FO_MAIN_BUTTONS; i++) {
+        if (inside(x, y, l.buttons[i].x, l.buttons[i].y, l.buttons[i].w, l.buttons[i].h)) r.action = actions[i];
+    }
+    if (inside(x, y, l.settings.x, l.settings.y, l.settings.w, l.settings.h)) r.action = FO_SCREEN_SETTINGS;
+    r.click = r.action != FO_SCREEN_NONE;
+    return r;
+}
+
+// --- CreditsScreen (adf.java) ---------------------------------------------
+
+void fo_credits_draw(void) {
+    menu_screen(text("credits"));
+    back_draw();
+    // The lines from the bottom: each title has its names under it, 2 units
+    // away, and 5 units over the names under them.
+    struct {
+        const char *s;
+        int title;
+    } lines[8] = {
+        {"jonas, gustas, lukas, misha,\nvycka, robertas, marius,\ndomas and other homies", 0},
+        {text("special_thanks"), 1},
+        {"dmitry jbanov\n(disyman)", 0},
+        {text("music_sounds"), 1},
+        {"gintas zenevskis", 0},
+        {text("code"), 1},
+        {"kostic milos\n(harveydentmd)", 0},
+        {text("art"), 1},
+    };
+    float ys[8], hs[8], y = 0, lh = text_h(S.pixel6);
+    for (int i = 0; i < 8; i++) {
+        int n = 1;
+        for (const char *c = lines[i].s; *c; c++) n += *c == '\n';
+        hs[i] = n * lh;
+        if (i > 0) y += hs[i - 1] + (lines[i].title ? 2 : 5) * gU;
+        ys[i] = y;
+    }
+    float bandY = 35.0f * gH / 150.0f;
+    float base = bandY + 33 * gU - ys[7] / 2;
+    for (int i = 0; i < 8; i++) {
+        label(S.pixel6, lines[i].s, 0, base + ys[i], gW, hs[i], lines[i].title ? 0x8f846d : 0xe7dec1, 1);
+    }
+}
+
+FOScreenResult fo_credits_tap(float x, float y) {
+    FOScreenResult r = {0};
+    if (back_tap(x, y)) r.action = FO_SCREEN_BACK;
+    r.click = r.action != FO_SCREEN_NONE;
+    return r;
+}
+
+// --- SettingsScreen (ago.java) --------------------------------------------
+
+// The checkboxes from the bottom. The original also has the notifications.
+static const char *const kSettingKeys[FO_SETTING_COUNT] = {"show_killcam", "play_theme_music", "enable_vignette_effect"};
+static int gSettings[FO_SETTING_COUNT];
+
+typedef struct {
+    FOBox controls;
+    FOBox boxes[FO_SETTING_COUNT];   // The whole checkbox: the box and its text.
+} FOSettingsLayout;
+
+void fo_settings_open(const int on[FO_SETTING_COUNT]) {
+    for (int i = 0; i < FO_SETTING_COUNT; i++) gSettings[i] = on[i];
+}
+
+// GangfortUICheckbox (aik.java): a box of 16 x 14 units, and the text 3
+// units to its right.
+static FOSettingsLayout settings_layout(void) {
+    FOSettingsLayout l;
+    float u = gU, gap = 7 * u;
+    float lh = text_h(S.pixel6), ch = 14 * u > lh ? 14 * u : lh;
+    float bw = 84 * u, bh = 18 * u;
+    float total = bh + FO_SETTING_COUNT * (gap + ch);
+    float bandY = 35.0f * gH / 150.0f;
+    float gy = bandY + 33 * u - total / 2;
+    l.controls = (FOBox){gW / 2 - bw / 2, gy, bw, bh};
+    // The group of the checkboxes has its middle at the middle of the top
+    // checkbox (ago.java:95).
+    float top = 16 * u + 3 * u + text_w(S.pixel6, text(kSettingKeys[FO_SETTING_COUNT - 1]));
+    float gx = gW / 2 - top / 2;
+    float y = gy + bh + gap;
+    for (int i = 0; i < FO_SETTING_COUNT; i++) {
+        float w = 16 * u + 3 * u + text_w(S.pixel6, text(kSettingKeys[i]));
+        l.boxes[i] = (FOBox){gx, y, w, ch};
+        y += ch + gap;
+    }
+    return l;
+}
+
+void fo_settings_draw(void) {
+    float u = gU;
+    menu_screen(text("settings"));
+    back_draw();
+    FOSettingsLayout l = settings_layout();
+    button(text("controls"), l.controls);
+    float lh = text_h(S.pixel6);
+    for (int i = 0; i < FO_SETTING_COUNT; i++) {
+        FOBox b = l.boxes[i];
+        FOSprite box = ui(gSettings[i] ? "checkbox_checked" : "checkbox_unchecked");
+        image(&box, b.x, b.y, 16 * u, 14 * u);
+        const char *s = text(kSettingKeys[i]);
+        label(S.pixel6, s, b.x + 19 * u, b.y + 7 * u - lh / 2 - u, text_w(S.pixel6, s), lh, 0xe7dec2, 0);
+    }
+}
+
+FOScreenResult fo_settings_tap(float x, float y) {
+    FOScreenResult r = {0};
+    FOSettingsLayout l = settings_layout();
+    if (back_tap(x, y)) r.action = FO_SCREEN_BACK;
+    if (inside(x, y, l.controls.x, l.controls.y, l.controls.w, l.controls.h)) r.action = FO_SCREEN_CONTROLS;
+    for (int i = 0; i < FO_SETTING_COUNT; i++) {
+        FOBox b = l.boxes[i];
+        if (inside(x, y, b.x, b.y, b.w, b.h)) {
+            gSettings[i] = !gSettings[i];
+            r.action = FO_SCREEN_SETTING;
+            r.setting = i;
+            r.value = gSettings[i];
+        }
+    }
+    r.click = r.action != FO_SCREEN_NONE;
+    return r;
+}
+
 // --- SingleplayerScreen (agv.java) ----------------------------------------
 
 const char *fo_single_map_name(int index) {
@@ -205,11 +439,17 @@ void fo_single_draw(float dt) {
     if (gSelectorMove < 0.15f && gSelectorFrom != 0) sx += (gPlayers > gSelectorFrom ? 1.0f : -1.0f) * u;
     image(&sel, sx, sy, sel.w * u, sel.h * u);
     button(text("play"), l.play);
+    back_draw();
 }
 
 FOScreenResult fo_single_tap(float x, float y) {
-    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0, 0};
+    FOScreenResult r = {0};
     FOSingleLayout l = single_layout();
+    if (back_tap(x, y)) {
+        r.action = FO_SCREEN_BACK;
+        r.click = 1;
+        return r;
+    }
     // Each arrow takes taps in three times its size (agv.java:64-79).
     if (gMap > 0 && inside(x, y, l.left.x - l.left.w, l.left.y - l.left.h, 3 * l.left.w, 3 * l.left.h)) {
         gMap--;
@@ -321,7 +561,7 @@ void fo_team_draw(const FOWorld *world) {
 }
 
 FOScreenResult fo_team_tap(float x, float y) {
-    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0, 0};
+    FOScreenResult r = {0};
     FOTeamLayout l = team_layout();
     if (inside(x, y, l.red.x, l.red.y, l.red.w, l.red.h)) {
         r.action = FO_SCREEN_TEAM;
@@ -462,7 +702,7 @@ void fo_class_draw(const FOWorld *world, float dt) {
 }
 
 FOScreenResult fo_class_tap(float x, float y) {
-    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0, 0};
+    FOScreenResult r = {0};
     FOClassLayout l = class_layout();
     if (inside(x, y, l.chars.x, l.chars.y, l.chars.w, l.chars.h)) {
         for (int c = 1; c <= 9; c++) {
@@ -521,7 +761,7 @@ void fo_menu_draw(void) {
 }
 
 FOScreenResult fo_menu_tap(float x, float y) {
-    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0, 0};
+    FOScreenResult r = {0};
     FOMenuLayout l = menu_layout();
     FOScreenAction actions[4] = {FO_SCREEN_RESUME, FO_SCREEN_CHANGE_CLASS, FO_SCREEN_SWITCH_TEAM, FO_SCREEN_QUIT};
     for (int i = 0; i < 4; i++) {
