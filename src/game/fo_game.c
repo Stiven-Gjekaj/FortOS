@@ -353,7 +353,19 @@ void fo_game_frame(double dt) {
         } else if (world->now - p->hurtTime < 300 && G.camera.shakeTime <= 0) {
             fo_camera_shake(&G.camera, 300, 0.075f);
         }
-        fo_camera_update(&G.camera, (float)dt, x, y, world->map.width, world->map.height);
+        if (!fo_mode_bomb_down(world)) fo_camera_update(&G.camera, (float)dt, x, y, world->map.width, world->map.height);
+    }
+    FOWorld *w = G.map.world;
+    for (int i = 0; i < w->event_count; i++) {
+        const FOEvent *e = &w->events[i];
+        if (e->kind == FO_EVENT_SHAKE) fo_camera_shake(&G.camera, e->item, e->value);
+    }
+    // GameWorld.j() (wt.java:149-155): when the bomb is down, the camera
+    // looks at the place of the blast.
+    if (fo_mode_bomb_down(w)) {
+        float fx, fy;
+        fo_mode_focus(w, &fx, &fy);
+        fo_camera_update(&G.camera, (float)dt, fx, fy, w->map.width, w->map.height);
     }
     double t1 = wall_seconds();
     fo_gfx_begin(G.width, G.height, fo_rgb(0x000000));
@@ -400,9 +412,36 @@ void fo_game_debug(const char *command) {
         if (se->obj.body) fo_phys_body_position(se->obj.body, &x, &y);
         fprintf(stderr, "dump: sentry active %d landed %d built %lld at %.2f %.2f health %.0f\n", se->active,
                 se->landed, se->built, x, y, se->health);
+        const FOMode *md = &G.map.world->mode;
+        for (int t = 1; t <= 2 && md->kind == FO_MODE_CTF; t++) {
+            fo_phys_body_position(md->flags[t].obj.body, &x, &y);
+            fprintf(stderr, "dump: flag %d at %.2f %.2f carrier %d dropped %d\n", t, x, y, md->flags[t].carrier,
+                    md->flags[t].dropped);
+        }
     }
     if (p && strncmp(command, "jump", 4) == 0) fo_player_jump(G.map.world, p);
     float f;
+    // The game modes: set the time of the round, move the local player to x,
+    // or move the bomb to x.
+    FOMode *m = &G.map.world->mode;
+    if (sscanf(command, "modetime %f", &f) == 1) {
+        if (m->kind == FO_MODE_BOMB) m->bombTimer = f;
+        if (m->kind == FO_MODE_KOTH && m->owner == FO_TEAM_BLU) m->bluTimer = f;
+        if (m->kind == FO_MODE_KOTH && m->owner != FO_TEAM_BLU) m->redTimer = f;
+    }
+    float g;
+    if (p && sscanf(command, "goto %f %f", &f, &g) == 2) {
+        fo_phys_body_set_transform(p->obj.body, f, g, 0);
+        fo_phys_body_set_awake(p->obj.body, 1);
+    }
+    if (m->kind == FO_MODE_BOMB && sscanf(command, "bombat %f %f", &f, &g) == 2) {
+        fo_phys_body_set_transform(m->bomb.obj.body, f, g, 0);
+        fo_phys_body_set_awake(m->bomb.obj.body, 1);
+    }
+    if (m->kind == FO_MODE_CTF && sscanf(command, "score %d %d", &n, &G.debugScore) == 2) {
+        m->redScore = n;
+        m->bluScore = G.debugScore;
+    }
     if (sscanf(command, "shoot %f", &f) == 1) {
         G.debugShoot = 1;
         G.debugAim = f;
