@@ -389,6 +389,17 @@ FOTexture fo_gfx_texture(const unsigned char *rgba, int width, int height) {
     return texture;
 }
 
+void fo_gfx_snapshot(FOTexture *texture, int width, int height) {
+    fo_gfx_flush();
+    if (!texture->id || texture->width != width || texture->height != height) {
+        fo_gfx_texture_free(texture);
+        *texture = fo_gfx_texture(NULL, width, height);
+    }
+    glBindTexture(GL_TEXTURE_2D, texture->id);
+    gCurrentTexture = texture->id;
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+}
+
 void fo_gfx_texture_free(FOTexture *texture) {
     if (!texture || !texture->id) return;
     fo_gfx_flush();

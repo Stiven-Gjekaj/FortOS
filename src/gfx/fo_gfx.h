@@ -72,6 +72,11 @@ void fo_gfx_rect(float x, float y, float w, float h, FOColor color);
 // Fills a turned rectangle: a line of thickness from (x1, y1) to (x2, y2).
 void fo_gfx_line(float x1, float y1, float x2, float y2, float thickness, FOColor color);
 
+// Copies the frame that is on the screen now into texture, as the
+// FrameBuffer of the kill cam (aeb.java:735-739). The rows go from the
+// bottom of the screen up. It makes the texture at the first call.
+void fo_gfx_snapshot(FOTexture *texture, int width, int height);
+
 // Sends the sprites that wait in the batch to the GPU.
 void fo_gfx_flush(void);
 
