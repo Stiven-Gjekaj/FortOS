@@ -19,7 +19,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Draw text with the bitmap fonts of the original.
 - Measure the memory of the textures of one map on the phone.
 
-## 0.2: the world
+## 0.2: the world (done, 2026-10-18)
 
 - Read the `collisions` and `areas` groups of the `.tmx` maps.
 - Add Box2D 2.3 with the gravity, the scale, and the time step of the
