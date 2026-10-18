@@ -132,12 +132,20 @@ FO_TEST(testCombatMostDamageIsTheKiller) {
     fo_world_free(world);
 }
 
-FO_TEST(testCombatDeathWithNoDamageIsNoKill) {
+FO_TEST(testCombatDeathWithNoDamageGivesTheVictimThePoints) {
+    // KillEventData.java:69-72: with no damage in the history, the victim
+    // is the killer, and xn.java:788 gives it 2 points.
     FOWorld *world = fo_world_new(kFlat, 3);
     FOPlayer *e = standing(world, 3, FO_TEAM_RED, FO_CLASS_SCOUT, 30);
     fo_player_set_health(world, e, 0);
-    FO_EQUAL_INT(e->score, 0);
-    FO_EQUAL_INT(e->killer, 0);
+    FO_EQUAL_INT(e->score, 2);
+    FO_EQUAL_INT(e->killer, 3);
+    int kills = 0, item = -1;
+    for (int i = 0; i < world->event_count; i++) {
+        if (world->events[i].kind == FO_EVENT_KILL) kills++, item = world->events[i].item;
+    }
+    FO_EQUAL_INT(kills, 1);
+    FO_EQUAL_INT(item, 0);
     fo_world_free(world);
 }
 

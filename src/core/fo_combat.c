@@ -545,19 +545,19 @@ void fo_combat_credit(FOWorld *world, const FODamage *history, int victim, int s
 void fo_combat_kill(FOWorld *world, FOPlayer *victim) {
     int assister, item;
     int killer = credit(world, victim->damage, victim->id, &assister, &item);
-    if (killer != victim->id) {
-        FOPlayer *k = player_by_id(world, killer);
-        if (k) {
-            // The points (xn.java:788-800): 2 for the kill, 1 more for a spy
-            // that hides, 1 more for the holder of the objective.
-            k->score += 2;
-            if (victim->cls == FO_CLASS_SPY && (victim->cloaked || victim->disguise.active)) k->score += 1;
-            if (fo_world_holds_objective(world, victim)) k->score += 1;
-        }
-        FOPlayer *a = assister ? player_by_id(world, assister) : NULL;
-        if (a) a->score += 1;
+    // The points (xn.java:788-800): 2 for the kill, 1 more for a spy that
+    // hides, 1 more for the holder of the objective. With no damage in the
+    // history, KillEventData names the victim as the killer
+    // (KillEventData.java:69-72), so the victim takes the points.
+    FOPlayer *k = player_by_id(world, killer);
+    if (k) {
+        k->score += 2;
+        if (victim->cls == FO_CLASS_SPY && (victim->cloaked || victim->disguise.active)) k->score += 1;
+        if (fo_world_holds_objective(world, victim)) k->score += 1;
         victim->killer = killer;
     }
+    FOPlayer *a = assister ? player_by_id(world, assister) : NULL;
+    if (a) a->score += 1;
     float x, y;
     fo_player_position(victim, &x, &y);
     kill_event(world, killer, victim->id, assister, item, 0, x, y);
