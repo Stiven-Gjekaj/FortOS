@@ -46,6 +46,11 @@ void fo_look_bullets(const FOWorld *world, float now);
 // Draws the weapons that the dead players dropped.
 void fo_look_pickups(const FOWorld *world);
 
+// Draws a standing character of the class with its middle at the screen
+// point (cx, cy), for a menu. unit is the screen size of one art pixel.
+void fo_look_preview(const FOWorld *world, int cls, short team, float cx, float cy, float unit, float time, float width,
+                     float height);
+
 // Draws the bomb and its gates on the bomb map.
 void fo_look_bomb(const FOWorld *world);
 

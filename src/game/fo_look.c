@@ -764,3 +764,32 @@ void fo_look_koth(const FOWorld *world, float x, float y) {
     }
     draw_cp_part(&gCpShown, x, y);
 }
+
+// ItemsEquippedUICharacter (ait.java): a standing character of the class
+// on a menu, with its middle at the screen point (cx, cy). unit is the
+// size of one art pixel on the screen. width and height are the size of
+// the screen, for the view.
+void fo_look_preview(const FOWorld *world, int cls, short team, float cx, float cy, float unit, float time, float width,
+                     float height) {
+    if (cls < 1 || cls > 9 || unit <= 0) return;
+    FOPlayer p;
+    memset(&p, 0, sizeof(p));
+    p.cls = cls;
+    p.team = team;
+    p.alive = 1;
+    p.facingRight = 1;
+    p.obj.w = 0.90000004f;
+    p.obj.h = 1.9f;
+    p.foot.count = 1;
+    p.foot.ground = 1;
+    p.landTime = -100000;
+    p.weapon.def = fo_weapon_default(cls);
+    FOLook look;
+    memset(&look, 0, sizeof(look));
+    look.stateTime = time;
+    // One meter is ten art pixels, so the view puts (0, 0) at (cx, cy).
+    float m = 10.0f * unit;
+    fo_gfx_view(-cx / m, -cy / m, (width - cx) / m, (height - cy) / m);
+    draw_main(world, &p, &look, time, 0, 0, cls, team, &p.weapon, FO_WHITE, -1);
+    fo_gfx_view(0, 0, width, height);
+}
