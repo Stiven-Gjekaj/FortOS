@@ -92,6 +92,22 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   around the art of each weapon. Reason: the box only changes how the
   weapon rolls.
 
+- **The carried flag is 0.7 m above the carrier.** The original adds the
+  height of the legs image of the carrier, and the core has no images.
+  0.7 m is the legs of most classes. Reason: the flag only falls from
+  this place when the carrier dies.
+- **The carried flag does not keep a fall speed.** The original moves the
+  flag each frame, but gravity still adds to its speed. A drop then
+  carries that speed into the ground. FortOS sets the speed to 0 while a
+  player carries the flag.
+- **The round-over dialog does not show the classes yet.** The original
+  shows the class of each player, and these run on the bottom bar. The
+  rest of the dialog is as in the original.
+- **The place of the hill sign comes from the map.** The property
+  `koth_cp_indicator_pos` of `gantown.tmx` is (582, 205.5). The original
+  scales it by 0.1 and does not turn the y axis, so the sign is at
+  (58.2, 20.55). FortOS uses the same place.
+
 ## The quirks of the original that stay
 
 - The ray of the sniper rifle ends at the point (cos, sin) x 300 of the
@@ -102,6 +118,15 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   its own team (xn.java:348-361).
 - The uber takes 3 each second, but the heal gives 1 back each second, so
   an uber lasts 10 s while the medic heals.
+- A capture of a flag gives 2 points to each BLU player, also when RED
+  captures (acn.java:64-86).
+- In capture the flag, no player holds the objective, because the test
+  asks for the flag of the own team (acn.java:48-53). So the kill of a
+  carrier gives no extra point.
+- The arrow of the BLU flag on the HUD aims from the place of the RED
+  arrow (ahy.java:86-88).
+- After the bomb goes off, the camera goes up 100 m each second, so it is
+  at the top of the fall area at once (acl.java:76-88).
 
 ## Identity
 
