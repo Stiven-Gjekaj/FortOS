@@ -32,6 +32,15 @@ static void run(FOWorld *world, int frames) {
     for (int i = 0; i < frames; i++) fo_world_update(world, 1 / 60.0f);
 }
 
+// The sound events of the last frame with the name.
+static int soundCount(const FOWorld *world, const char *name) {
+    int n = 0;
+    for (int i = 0; i < world->event_count; i++) {
+        if (world->events[i].kind == FO_EVENT_SOUND && strcmp(world->events[i].name, name) == 0) n++;
+    }
+    return n;
+}
+
 static FOPlayer *standingPlayer(FOWorld *world, short team, int cls, float x) {
     FOPlayer *p = fo_world_add_player(world, team * 10 + cls, team);
     fo_world_spawn(world, p, cls);
@@ -92,7 +101,7 @@ FO_TEST(testWorldJumpHeight) {
     }
     // v^2 / 2g = 8.5^2 / 30 = 2.41 m.
     FO_EXPECT(fabsf(top - y0 - 2.41f) < 0.15f);
-    FO_EXPECT(world->jumps == 0);
+    FO_EQUAL_INT(soundCount(world, "jump"), 0);
     fo_world_free(world);
 }
 
@@ -235,4 +244,60 @@ FO_TEST(testPlayerWithNoBodyIsStillAtTheOrigin) {
     fo_player_velocity(&p, &vx, &vy);
     FO_EXPECT(x == 0 && y == 0);
     FO_EXPECT(vx == 0 && vy == 0);
+}
+
+FO_TEST(testWorldJumpPlaysOneSoundOnThePlayer) {
+    FOWorld *world = newWorld(nil);
+    FOPlayer *p = standingPlayer(world, FO_TEAM_BLU, FO_CLASS_SOLDIER, 20);
+    FO_EXPECT(fo_player_jump(world, p));
+    int sounds = 0, attached = 0;
+    for (int i = 0; i < 60; i++) {
+        run(world, 1);
+        for (int k = 0; k < world->event_count; k++) {
+            const FOEvent *e = &world->events[k];
+            if (e->kind == FO_EVENT_SOUND && strcmp(e->name, "jump") == 0) {
+                sounds++;
+                attached = e->a;
+            }
+        }
+    }
+    FO_EQUAL_INT(sounds, 1);
+    FO_EQUAL_INT(attached, p->id);
+    fo_world_free(world);
+}
+
+FO_TEST(testWorldRespawnSoundAfterTheFirstUpdate) {
+    FOWorld *world = newWorld(nil);
+    // A player that spawns before the world updates it makes no sound, as
+    // a bot that joins (xn.java:950-959).
+    run(world, 60);
+    FOPlayer *p = fo_world_add_player(world, 1, FO_TEAM_BLU);
+    fo_world_spawn(world, p, FO_CLASS_SOLDIER);
+    FO_EQUAL_INT(soundCount(world, "respawn"), 0);
+    run(world, 30);
+    // A spawn of a living player, as a change of class in the room, makes
+    // no sound.
+    world->event_count = 0;
+    fo_world_spawn(world, p, FO_CLASS_PYRO);
+    FO_EQUAL_INT(soundCount(world, "respawn"), 0);
+    // A spawn after a death makes the sound.
+    fo_player_set_health(world, p, 0);
+    run(world, 30);
+    world->event_count = 0;
+    fo_world_spawn(world, p, FO_CLASS_PYRO);
+    FO_EQUAL_INT(soundCount(world, "respawn"), 1);
+    fo_world_free(world);
+}
+
+FO_TEST(testWorldDoorSounds) {
+    FOWorld *world = newWorld(nil);
+    fo_world_add_door(world, FO_TEAM_BLU, 10, 3.5f, 1.3f, 3.0f);
+    FOPlayer *p = standingPlayer(world, FO_TEAM_BLU, FO_CLASS_SOLDIER, 30);
+    fo_phys_body_set_transform(p->obj.body, 9, 3, 0);
+    run(world, 1);
+    FO_EQUAL_INT(soundCount(world, "spawndoors_open"), 1);
+    fo_phys_body_set_transform(p->obj.body, 30, 3, 0);
+    run(world, 1);
+    FO_EQUAL_INT(soundCount(world, "spawndoors_close"), 1);
+    fo_world_free(world);
 }

@@ -182,10 +182,13 @@ static void door_update(FOWorld *world, FODoor *d, float dt) {
     if (near > 0 && !d->open) {
         d->open = 1;
         d->targetY = d->openY;
+        // SpawnDoor.s() and t() (xw.java:116-138): the sound of the door.
+        fo_world_sound(world, "spawndoors_open", d->x, d->y, 0);
         fo_phys_body_set_mask(d->obj.body, FO_CAT_GROUND, 0);
     } else if (near == 0 && d->open) {
         d->open = 0;
         d->targetY = d->y;
+        fo_world_sound(world, "spawndoors_close", d->x, d->y, 0);
         fo_phys_body_set_mask(d->obj.body, FO_CAT_GROUND, 0x7fff);
     }
     float x, y;
@@ -290,6 +293,13 @@ void fo_world_spawn(FOWorld *world, FOPlayer *p, int cls) {
         float y0 = room->y + 1.9f, y1 = room->y + room->h - 1.9f;
         x = x0 + (x1 - x0) * fo_world_random(world);
         y = fo_world_random(world) * (y1 - y0) + y0;
+    }
+    // Player.b(boolean) (xn.java:950-959): the respawn sound, when the world
+    // updated the player before, and not more often than half of the length
+    // of the sound (1.15 s, akz.java).
+    if (p->updated && !p->alive && world->now - p->respawnSound > 575) {
+        fo_world_sound(world, "respawn", x, y, p->id);
+        p->respawnSound = world->now;
     }
     fo_phys_body_set_active(p->obj.body, 1);
     fo_phys_body_set_transform(p->obj.body, x, y, 0);
@@ -590,10 +600,14 @@ static void jump_sounds(FOWorld *world, FOPlayer *p) {
             p->jumpSoundDouble = 0;
         }
     } else if (vy > 1.0f && !p->jumpSoundUp) {
-        world->jumps++;
+        float x, y;
+        fo_player_position(p, &x, &y);
+        fo_world_sound(world, "jump", x, y, p->id);
         p->jumpSoundUp = 1;
     } else if (p->cls == FO_CLASS_SCOUT && vy > 0 && vy > p->lastVy && !p->jumpSoundDouble && vy - p->lastVy > 1.0f) {
-        world->jumps++;
+        float x, y;
+        fo_player_position(p, &x, &y);
+        fo_world_sound(world, "jump", x, y, p->id);
         p->jumpSoundDouble = 1;
     }
     p->lastVy = vy;
@@ -699,7 +713,6 @@ static void server_update(FOWorld *world) {
 void fo_world_update(FOWorld *world, float dt) {
     if (dt < 0) dt = 0;
     if (dt > 0.1f) dt = 0.1f;
-    world->jumps = 0;
     world->event_count = 0;
     world->now += (long long)(dt * 1000.0f + 0.5f);
     world->accumulator += dt;
@@ -714,6 +727,7 @@ void fo_world_update(FOWorld *world, float dt) {
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
         if (world->players[i].used) player_update(world, &world->players[i], dt);
     }
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) world->players[i].updated |= world->players[i].used;
     fo_combat_update(world, dt);
     fo_classes_sentries(world, dt);
     fo_modes_objects(world, dt);

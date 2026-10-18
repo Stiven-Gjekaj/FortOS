@@ -20,6 +20,13 @@ void fo_world_event(FOWorld *world, FOEventKind kind, const char *name, float x,
     e->flip = 1;
 }
 
+void fo_world_sound(FOWorld *world, const char *name, float x, float y, int attach) {
+    fo_world_event(world, FO_EVENT_SOUND, name, x, y);
+    if (world->event_count > 0 && world->events[world->event_count - 1].kind == FO_EVENT_SOUND) {
+        world->events[world->event_count - 1].a = attach;
+    }
+}
+
 // --- The aim and the muzzle -------------------------------------------------
 
 void fo_player_set_aim(FOPlayer *p, float degrees) {

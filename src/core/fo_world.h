@@ -181,6 +181,8 @@ typedef struct FOPlayer {
     float health;
     FOTouchSet foot, left, right;
     int move;                // The move code of the input.
+    int updated;             // aA: the world updated the player once.
+    long long respawnSound;  // ar: the time of the last respawn sound.
     int noMove;              // The controller skips Player.h(float) in this
                              // frame, so the speed stays (a paused bot).
     long long jumpTime;      // Q: the time of the last jump.
@@ -239,7 +241,8 @@ typedef struct {
 
 // The events of one frame, for the sounds, the effects, and the kill feed.
 typedef enum {
-    FO_EVENT_SOUND,          // name at (x, y)
+    FO_EVENT_SOUND,          // name at (x, y). a is the id of the player that
+                             // the sound follows, or 0.
     FO_EVENT_EFFECT,         // name at (x, y). flip is 1 or -1.
     FO_EVENT_KILL,           // a kills b with item, c assists.
     FO_EVENT_HIT,            // a hits b for value damage.
@@ -348,8 +351,6 @@ typedef struct FOWorld {
         float px, py, nx, ny;
     } begins[256];
     int begin_count;
-    // The events of the last frame, for the sounds.
-    int jumps;
     FOBullet bullets[FO_MAX_BULLETS];
     FOEvent events[FO_MAX_EVENTS];
     int event_count;
@@ -460,6 +461,10 @@ void fo_mode_objective(const FOWorld *world, float *x, float *y);
 
 // Adds an event of the frame.
 void fo_world_event(FOWorld *world, FOEventKind kind, const char *name, float x, float y);
+
+// Adds a sound at (x, y) that follows the player with the id attach, or no
+// player with 0 (SpatialAudioManager.a, ala.java).
+void fo_world_sound(FOWorld *world, const char *name, float x, float y, int attach);
 
 // The jump of the input (Player.t, xn.java:705-724). Returns 1 when the
 // player jumps.

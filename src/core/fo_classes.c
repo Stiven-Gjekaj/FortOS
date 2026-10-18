@@ -370,7 +370,7 @@ void fo_player_ability(FOWorld *world, FOPlayer *p) {
             p->score += 2;
             float x, y;
             fo_player_position(p, &x, &y);
-            fo_world_event(world, FO_EVENT_SOUND, "medic_uber_begin", x, y);
+            fo_world_sound(world, "medic_uber_begin", x, y, p->id);
         }
     } else if (p->cls == FO_CLASS_ENGINEER) {
         if (!p->sentry.active && p->steel >= 100.0f && !fo_world_in_area(world, p, FO_AREA_NO_SENTRY)) {
@@ -392,7 +392,7 @@ static void end_uber(FOWorld *world, FOPlayer *p) {
     p->uber = 0;
     float x, y;
     fo_player_position(p, &x, &y);
-    fo_world_event(world, FO_EVENT_SOUND, "medic_uber_end", x, y);
+    fo_world_sound(world, "medic_uber_end", x, y, p->id);
 }
 
 // --- The update of each class -----------------------------------------------------
