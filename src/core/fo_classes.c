@@ -343,7 +343,11 @@ static void sentry_update(FOWorld *world, FOSentry *s, float dt) {
 
 // --- The actions ---------------------------------------------------------------
 
-static int in_area(const FOWorld *world, const FOPlayer *p, FOAreaKind kind) {
+int fo_sentry_is_ready(const FOWorld *world, const FOSentry *s) {
+    return fo_sentry_ready(world, s);
+}
+
+int fo_world_in_area(const FOWorld *world, const FOPlayer *p, FOAreaKind kind) {
     float x, y;
     fo_player_position(p, &x, &y);
     for (int i = 0; i < world->map.area_count; i++) {
@@ -369,7 +373,7 @@ void fo_player_ability(FOWorld *world, FOPlayer *p) {
             fo_world_event(world, FO_EVENT_SOUND, "medic_uber_begin", x, y);
         }
     } else if (p->cls == FO_CLASS_ENGINEER) {
-        if (!p->sentry.active && p->steel >= 100.0f && !in_area(world, p, FO_AREA_NO_SENTRY)) {
+        if (!p->sentry.active && p->steel >= 100.0f && !fo_world_in_area(world, p, FO_AREA_NO_SENTRY)) {
             build_sentry(world, p);
         } else if (p->sentry.active) {
             fo_sentry_remove(world, &p->sentry);
@@ -507,4 +511,10 @@ void fo_classes_death(FOWorld *world, FOPlayer *p) {
     p->healTarget = 0;
     end_uber(world, p);
     fo_classes_reset(world, p, 1);
+}
+
+int fo_world_in_own_spawn(const FOWorld *world, const FOPlayer *p) {
+    if (p->team == FO_TEAM_BLU) return fo_world_in_area(world, p, FO_AREA_SPAWN_BLU);
+    if (p->team == FO_TEAM_RED) return fo_world_in_area(world, p, FO_AREA_SPAWN_RED);
+    return 0;
 }

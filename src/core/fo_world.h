@@ -353,6 +353,13 @@ int fo_player_healer(const FOWorld *world, const FOPlayer *player);
 // The disguise is complete (add.b()): 1.4 s after the start.
 int fo_player_disguised(const FOWorld *world, const FOPlayer *player);
 
+// BaseGameMap.a(xn): the player is in the spawn room of its team.
+int fo_world_in_own_spawn(const FOWorld *world, const FOPlayer *player);
+// The player is in an area of the kind.
+int fo_world_in_area(const FOWorld *world, const FOPlayer *player, FOAreaKind kind);
+// SentryGun.A(): the build of the sentry is done.
+int fo_sentry_is_ready(const FOWorld *world, const FOSentry *sentry);
+
 // Adds an event of the frame.
 void fo_world_event(FOWorld *world, FOEventKind kind, const char *name, float x, float y);
 
