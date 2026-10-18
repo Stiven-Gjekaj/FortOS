@@ -14,6 +14,8 @@
 #include "fo_bots.h"
 #include "fo_hud.h"
 #include "fo_screens.h"
+#include "fo_sound.h"
+#include "fo_audio.h"
 #include "fo_look.h"
 #include "fo_maps.h"
 #include "fo_world.h"
@@ -38,6 +40,8 @@ static struct {
     int screen;               // FO_VIEW_SINGLE or FO_VIEW_MATCH.
     int dialog;               // The dialog over the match, or FO_DIALOG_NONE.
     int botsJoined;           // h of xa.java: the bots joined the match.
+    FOMixer *mixer;
+    int wasOver;              // The round was over in the last frame.
     FOLook looks[FO_MAX_PLAYERS];
     FOCamera camera;
     FOControls controls;
@@ -85,6 +89,8 @@ static FOPlayer *local_player(void) {
 // the team dialog opens (xa.java:28-52, aeb.java:98). With play, the local
 // player takes the team and the class of the debug commands at once.
 static int start_map(FOMapId id, int play) {
+    fo_sound_stop_all();
+    G.wasOver = 0;
     if (G.mapLoaded) fo_map_free(&G.map);
     G.mapLoaded = 0;
     double start = wall_seconds();
@@ -120,6 +126,8 @@ static int start_map(FOMapId id, int play) {
 
 // SingleplayerScreen (agv.java): the first screen.
 static void open_single(void) {
+    fo_sound_stop_all();
+    fo_sound_music(1.0f);
     if (G.mapLoaded) fo_map_free(&G.map);
     G.mapLoaded = 0;
     G.screen = FO_VIEW_SINGLE;
@@ -145,6 +153,12 @@ int fo_game_start(const char *apk_path, int width, int height) {
     if (!fo_gfx_init()) {
         fail("OpenGL ES 2.0 does not start.");
         return 0;
+    }
+    // The music plays from the start. The sounds decode on a second thread.
+    G.mixer = fo_mixer_new(FO_AUDIO_RATE);
+    if (G.mixer) {
+        fo_sound_init(G.mixer);
+        if (!fo_audio_start(G.mixer)) fprintf(stderr, "audio: no output\n");
     }
     char *texts = (char *)fo_assets_read("texts/gangforttexts.properties", NULL);
     G.texts = texts ? fo_text_parse(texts) : NULL;
@@ -418,6 +432,24 @@ void fo_game_frame(double dt) {
         fo_mode_focus(w, &fx, &fy);
         fo_camera_update(&G.camera, (float)dt, fx, fy, w->map.width, w->map.height);
     }
+    // GameWorld.a(float) (wt.java:79-89): the ear is on the local player, and
+    // the sounds reach half the diagonal of the view and the way from the
+    // camera to the player. With no living player, the ear is the camera.
+    float half = sqrtf(G.camera.viewW * G.camera.viewW + G.camera.viewH * G.camera.viewH) / 2;
+    float ex = G.camera.shownX, ey = G.camera.shownY, range = half;
+    if (p && p->alive) {
+        fo_player_position(p, &ex, &ey);
+        range = half + sqrtf((ex - G.camera.shownX) * (ex - G.camera.shownX) + (ey - G.camera.shownY) * (ey - G.camera.shownY));
+    }
+    fo_sound_update(w, FO_LOCAL_ID, ex, ey, range, G.time);
+    // The music: 0.4 in a match and 0 at the end of a round. The end plays
+    // the sound of the victory or of the loss (aeb.java:325-345).
+    int over = fo_mode_over(w);
+    fo_sound_music(over ? 0.0f : 0.4f);
+    if (over && !G.wasOver && p) {
+        fo_sound_global(p->team == fo_mode_winner(w) ? "game_over_victory" : "game_over_lost");
+    }
+    G.wasOver = over;
     double t1 = wall_seconds();
     fo_gfx_begin(G.width, G.height, fo_rgb(0x000000));
     draw_world();
@@ -435,6 +467,7 @@ void fo_game_frame(double dt) {
 // The answer to a tap on a screen or a dialog.
 static void screen_action(FOScreenResult r) {
     FOPlayer *p = local_player();
+    if (r.click) fo_sound_global("menu_click1");
     switch (r.action) {
     case FO_SCREEN_PLAY:
         // SingleplayerScreen.ahc (ahc.java:22-28).
@@ -536,6 +569,7 @@ void fo_game_debug(const char *command) {
         const FOMode *md = &w->mode;
         float bx = 0, by = 0;
         if (md->kind == FO_MODE_BOMB) fo_phys_body_position(md->bomb.obj.body, &bx, &by);
+        fprintf(stderr, "audio voices %d\n", G.mixer ? fo_mixer_voices(G.mixer) : -1);
         fprintf(stderr, "mode %d over %d koth owner %d progress %.0f red %.0f blu %.0f bomb %.2f %.2f timer %.0f "
                         "ctf %d-%d carriers %d %d\n",
                 md->kind, fo_mode_over(w), md->owner, md->progress, md->redTimer, md->bluTimer, bx, by, md->bombTimer,

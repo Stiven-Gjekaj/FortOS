@@ -208,14 +208,20 @@ void fo_single_draw(float dt) {
 }
 
 FOScreenResult fo_single_tap(float x, float y) {
-    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0};
+    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0, 0};
     FOSingleLayout l = single_layout();
     // Each arrow takes taps in three times its size (agv.java:64-79).
-    if (gMap > 0 && inside(x, y, l.left.x - l.left.w, l.left.y - l.left.h, 3 * l.left.w, 3 * l.left.h)) gMap--;
-    else if (gMap < 2 && inside(x, y, l.right.x - l.right.w, l.right.y - l.right.h, 3 * l.right.w, 3 * l.right.h)) gMap++;
+    if (gMap > 0 && inside(x, y, l.left.x - l.left.w, l.left.y - l.left.h, 3 * l.left.w, 3 * l.left.h)) {
+        gMap--;
+        r.click = 1;
+    } else if (gMap < 2 && inside(x, y, l.right.x - l.right.w, l.right.y - l.right.h, 3 * l.right.w, 3 * l.right.h)) {
+        gMap++;
+        r.click = 1;
+    }
     for (int i = 0; i < 3; i++) {
         if (inside(x, y, l.bots[i].x, l.bots[i].y, l.bots[i].w, l.bots[i].h)) {
             int n = 8 + 2 * i;
+            r.click = 1;
             if (n != gPlayers) {
                 gSelectorFrom = gPlayers;
                 gPlayers = n;
@@ -225,6 +231,7 @@ FOScreenResult fo_single_tap(float x, float y) {
     }
     if (inside(x, y, l.play.x, l.play.y, l.play.w, l.play.h)) {
         r.action = FO_SCREEN_PLAY;
+        r.click = 1;
         r.map = gMap;
         r.players = gPlayers;
     }
@@ -314,13 +321,15 @@ void fo_team_draw(const FOWorld *world) {
 }
 
 FOScreenResult fo_team_tap(float x, float y) {
-    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0};
+    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0, 0};
     FOTeamLayout l = team_layout();
     if (inside(x, y, l.red.x, l.red.y, l.red.w, l.red.h)) {
         r.action = FO_SCREEN_TEAM;
+        r.click = 1;
         r.team = FO_TEAM_RED;
     } else if (inside(x, y, l.blu.x, l.blu.y, l.blu.w, l.blu.h)) {
         r.action = FO_SCREEN_TEAM;
+        r.click = 1;
         r.team = FO_TEAM_BLU;
     }
     return r;
@@ -453,16 +462,20 @@ void fo_class_draw(const FOWorld *world, float dt) {
 }
 
 FOScreenResult fo_class_tap(float x, float y) {
-    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0};
+    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0, 0};
     FOClassLayout l = class_layout();
     if (inside(x, y, l.chars.x, l.chars.y, l.chars.w, l.chars.h)) {
         for (int c = 1; c <= 9; c++) {
             float dx = x - l.px[c], dy = y - l.py[c];
-            if (sqrtf(dx * dx + dy * dy) < 15 * gU) select_class(c);
+            if (sqrtf(dx * dx + dy * dy) < 15 * gU) {
+                select_class(c);
+                r.click = 1;
+            }
         }
     }
     if (inside(x, y, l.go.x, l.go.y, l.go.w, l.go.h)) {
         r.action = FO_SCREEN_CLASS;
+        r.click = 1;
         r.cls = gClass;
     }
     return r;
@@ -508,11 +521,14 @@ void fo_menu_draw(void) {
 }
 
 FOScreenResult fo_menu_tap(float x, float y) {
-    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0};
+    FOScreenResult r = {FO_SCREEN_NONE, 0, 0, 0, 0, 0};
     FOMenuLayout l = menu_layout();
     FOScreenAction actions[4] = {FO_SCREEN_RESUME, FO_SCREEN_CHANGE_CLASS, FO_SCREEN_SWITCH_TEAM, FO_SCREEN_QUIT};
     for (int i = 0; i < 4; i++) {
-        if (inside(x, y, l.buttons[i].x, l.buttons[i].y, l.buttons[i].w, l.buttons[i].h)) r.action = actions[i];
+        if (inside(x, y, l.buttons[i].x, l.buttons[i].y, l.buttons[i].w, l.buttons[i].h)) {
+            r.action = actions[i];
+            r.click = 1;
+        }
     }
     return r;
 }

@@ -39,6 +39,7 @@ typedef struct {
     int players;             // FO_SCREEN_PLAY: 8, 10, or 12.
     int team;                // FO_SCREEN_TEAM
     int cls;                 // FO_SCREEN_CLASS
+    int click;               // A button took the tap: play menu_click1.
 } FOScreenResult;
 
 // SingleplayerScreen. The maps are in the order of the original:
