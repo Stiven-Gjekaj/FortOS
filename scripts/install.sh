@@ -1,5 +1,7 @@
 #!/bin/sh
 # Build FortOS.app, copy it to the phone at "ssh iphone4s", and open it.
+# It takes the phone with scripts/phone.sh first. Give it back with
+# "scripts/phone.sh give" after the test.
 # It also copies the APK of GANGFORT to the phone when the phone does not
 # have it.
 # Usage: scripts/install.sh [--debug]
@@ -8,6 +10,8 @@
 set -e
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# Other projects test on the same phone. Take it, or stop when it is busy.
+"$ROOT/scripts/phone.sh" take
 APK=${GANGFORT_APK:-$(ls "$ROOT"/reference/*.apk 2>/dev/null | head -1)}
 "$ROOT/scripts/app.sh" "$@" >/dev/null
 
