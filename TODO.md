@@ -65,7 +65,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Add the round end, the team swap, and the points of the original.
 - Add the objective HUD and the round over dialog.
 
-## 0.6: the bots
+## 0.6: the bots (done, 2026-10-18)
 
 - Port the local game server of single player.
 - Port the waypoint graphs of the 3 maps.
@@ -74,6 +74,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Port the default brain and the brains of the builder, the dealer, the
   camper, and the agent.
 - Add the single player screen: the map, and 8, 10, or 12 players.
+- Add the team dialog, the class dialog, and the menu dialog of a match.
 
 ## 0.7: the feel
 
