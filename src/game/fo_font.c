@@ -30,9 +30,9 @@ float fo_font_line(const FOFont *font, float scale) {
 // The width of the line that starts at text, up to '\n' or the end.
 static float line_width(const FOFont *font, const char *text, float scale) {
     float width = 0;
-    for (const unsigned char *p = (const unsigned char *)text; *p && *p != '\n'; p++) {
-        const FOGlyph *g = &font->fnt.glyphs[*p];
-        if (g->present) width += g->advance * scale;
+    while (*text && *text != '\n') {
+        const FOGlyph *g = fo_fnt_glyph(&font->fnt, fo_utf8_next(&text));
+        if (g) width += g->advance * scale;
     }
     return width;
 }
@@ -48,10 +48,10 @@ void fo_font_draw(const FOFont *font, const char *text, float x, float y, float 
             float w = line_width(font, line, scale);
             pen -= align == FO_ALIGN_CENTER ? w / 2 : w;
         }
-        const unsigned char *p = (const unsigned char *)line;
-        for (; *p && *p != '\n'; p++) {
-            const FOGlyph *g = &font->fnt.glyphs[*p];
-            if (!g->present) continue;
+        const char *p = line;
+        while (*p && *p != '\n') {
+            const FOGlyph *g = fo_fnt_glyph(&font->fnt, fo_utf8_next(&p));
+            if (!g) continue;
             if (g->w > 0 && g->h > 0) {
                 FOSprite s = {t, (float)g->x / t->width, (float)g->y / t->height, (float)(g->x + g->w) / t->width,
                               (float)(g->y + g->h) / t->height, g->w, g->h};
@@ -60,7 +60,7 @@ void fo_font_draw(const FOFont *font, const char *text, float x, float y, float 
             }
             pen += g->advance * scale;
         }
-        line = *p == '\n' ? (const char *)p + 1 : NULL;
+        line = *p == '\n' ? p + 1 : NULL;
         top -= font->fnt.line_height * scale;
     }
 }
