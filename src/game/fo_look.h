@@ -46,4 +46,13 @@ void fo_look_bullets(const FOWorld *world, float now);
 // Draws the weapons that the dead players dropped.
 void fo_look_pickups(const FOWorld *world);
 
+// Draws the bomb and its gates on the bomb map.
+void fo_look_bomb(const FOWorld *world);
+
+// Draws the sign of the point at (x, y) on the hill map.
+void fo_look_koth(const FOWorld *world, float x, float y);
+
+// Draws the flags on the flag map.
+void fo_look_flags(const FOWorld *world, float now);
+
 #endif

@@ -257,10 +257,15 @@ static void draw_world(void) {
     fo_map_draw_back(&G.map, &G.sprites, G.camera.shownX, left, bottom, right, top);
     FOWorld *world = G.map.world;
     float now = world->now / 1000.0f;
+    fo_look_bomb(world);
     // The layers of wz.java: the dead bodies, the projectiles, the players.
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
         if (world->players[i].used) fo_look_dead(world, &world->players[i], now);
     }
+    fo_look_flags(world, now);
+    // The map property koth_cp_indicator_pos of gantown.tmx is (582, 205.5).
+    // The original scales it by 0.1 and does not turn the y axis (akm.java:113-127).
+    if (G.map.id == FO_MAP_GANTOWN) fo_look_koth(world, 58.2f, 20.55f);
     fo_look_bullets(world, now);
     fo_look_pickups(world);
     FOPlayer *viewer = local_player();

@@ -51,6 +51,9 @@ static FOSprite gCigarette[5];
 static FOSprite gDisguiseSmoke[12];
 static FOSprite gSentryLegs, gTurret[3], gAssemble[3][8];
 static FOSprite gBeam[3], gBarEmpty, gBarFull;
+static FOSprite gCpOwner[3], gCpGreyFill, gCpFill[3][8], gCpShown;
+static long long gCpTime;
+static FOSprite gCheckpoint[5], gBombBase, gBombHighlight, gFlags[3][7], gBlueBarEmpty, gBlueBarFull;
 static FOSprite gWeapons[64][3];        // By item id and team.
 static FOSprite gFlashes[64];
 static FOSprite gBullets[64][6];
@@ -163,6 +166,33 @@ void fo_look_init(const FOAtlasTextures *sprites) {
     gBeam[2] = named("medic_healingTextureRed");
     gBarEmpty = named("redbar_empty");
     gBarFull = named("redbar_full");
+    gBlueBarEmpty = named("bluebar_empty");
+    gBlueBarFull = named("bluebar_full");
+    for (int i = 0; i < 5; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "bomb_checkpoint%d", i + 1);
+        gCheckpoint[i] = named(name);
+    }
+    gCpOwner[0] = named("cp_indicator_grey");
+    gCpOwner[FO_TEAM_BLU] = named("cp_indicator_blu");
+    gCpOwner[FO_TEAM_RED] = named("cp_indicator_red");
+    gCpGreyFill = named("cp_indicator_grey_fillcut");
+    for (int i = 0; i < 8; i++) {
+        char name[40];
+        snprintf(name, sizeof(name), "cp_indicator_red_fillcut%d", i);
+        gCpFill[FO_TEAM_RED][i] = named(name);
+        snprintf(name, sizeof(name), "cp_indicator_blu_fillcut%d", i);
+        gCpFill[FO_TEAM_BLU][i] = named(name);
+    }
+    gBombBase = named("rollable_bomb_base");
+    gBombHighlight = named("rollable_bomb_highlight");
+    for (int i = 0; i < 7; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "ctf_flag_blue%d", i + 1);
+        gFlags[FO_TEAM_BLU][i] = named(name);
+        snprintf(name, sizeof(name), "ctf_flag_red%d", i + 1);
+        gFlags[FO_TEAM_RED][i] = named(name);
+    }
     static const char *sawn[] = {"bullet_sawngun1", "bullet_sawngun2", "bullet_sawngun3"};
     static const char *rocket[] = {"bullet_rocket_launcher"};
     static const char *flame[] = {"bullet_flamethrower1", "bullet_flamethrower2", "bullet_flamethrower3",
@@ -634,4 +664,103 @@ void fo_look_pickups(const FOWorld *world) {
         float w = s->w * Z, h = s->h * Z;
         fo_gfx_draw(s, x - w / 2, y - h / 2, w, h, w / 2, h / 2, fo_phys_body_angle(k->obj.body), 0, FO_WHITE);
     }
+}
+
+// BombCheckpoint.a(alh) (xf.java:67-70): the gate opens or closes in 5
+// frames of 0.1 s.
+static void draw_checkpoint(const FOWorld *world, const FOCheckpoint *c) {
+    int frame = (int)((world->now - c->changed) / 100);
+    if (frame > 4) frame = 4;
+    if (frame < 0) frame = 0;
+    if (!c->active) frame = 4 - frame;
+    const FOSprite *s = &gCheckpoint[frame];
+    if (s->w) fo_gfx_draw(s, c->x - c->obj.w / 2, c->y - c->obj.h / 2, c->obj.w, c->obj.h, 0, 0, 0, 0, FO_WHITE);
+}
+
+void fo_look_bomb(const FOWorld *world) {
+    const FOMode *m = &world->mode;
+    if (m->kind != FO_MODE_BOMB) return;
+    // The platforms (depth 0.5) hide the gates and the bomb (mapLayer5 and
+    // rollableBomb in wz.java).
+    fo_gfx_depth(FO_DEPTH_TEST, 0.55f);
+    for (int i = 0; i < m->checkpointCount; i++) draw_checkpoint(world, &m->checkpoints[i]);
+    // RollableBomb.a(alh) (act.java:262-265): the base turns with the body,
+    // and the highlight stays upright on it.
+    float x, y;
+    fo_phys_body_position(m->bomb.obj.body, &x, &y);
+    float w = m->bomb.obj.w, h = m->bomb.obj.h;
+    if (gBombBase.w) {
+        fo_gfx_draw(&gBombBase, x - w / 2, y - h / 2, w, h, w / 2, h / 2, fo_phys_body_angle(m->bomb.obj.body), 0,
+                    FO_WHITE);
+    }
+    if (gBombHighlight.w) fo_gfx_draw(&gBombHighlight, x - w / 2, y - h / 2, w, h, w / 2, h / 2, 0, 0, FO_WHITE);
+    fo_gfx_depth(FO_DEPTH_OFF, 0);
+}
+
+// CtfFlag (acm.java): the flag waves in 7 frames of 1/9 s. It leans by
+// 20 degrees on a carrier. A dropped flag shows the time to its return.
+void fo_look_flags(const FOWorld *world, float now) {
+    const FOMode *m = &world->mode;
+    if (m->kind != FO_MODE_CTF) return;
+    for (int t = FO_TEAM_BLU; t <= FO_TEAM_RED; t++) {
+        const FOFlag *f = &m->flags[t];
+        float x, y;
+        fo_phys_body_position(f->obj.body, &x, &y);
+        // The original starts each flag at a random frame. FortOS starts the
+        // two flags at different frames.
+        int frame = ((int)(now * 9.0f) + t * 3) % 7;
+        const FOSprite *s = &gFlags[t][frame];
+        float w = f->obj.w, h = f->obj.h;
+        int flip = f->carrier != -1 && !f->facingLeft;
+        if (s->w) fo_gfx_draw(s, x - w / 2, y - h / 2, w, h, w / 2, h / 2, f->angle, flip, FO_WHITE);
+        if (f->dropped && f->returnTime > 0) {
+            const FOSprite *e = t == FO_TEAM_RED ? &gBarEmpty : &gBlueBarEmpty;
+            const FOSprite *full = t == FO_TEAM_RED ? &gBarFull : &gBlueBarFull;
+            float by = y - h / 2 - 0.2f - 0.3f;
+            if (e->w) fo_gfx_draw(e, x - 0.75f, by, 1.5f, 0.2f, 0, 0, 0, 0, FO_WHITE);
+            if (full->w) fo_gfx_draw(full, x - 0.75f, by, 1.5f * (f->returnTime / 30.0f), 0.2f, 0, 0, 0, 0, FO_WHITE);
+        }
+    }
+}
+
+static void draw_cp_part(const FOSprite *s, float x, float y) {
+    if (s->w) fo_gfx_draw(s, x - 0.3f, y - 0.35f, s->w * Z, s->h * Z, 0, 0, 0, 0, FO_WHITE);
+}
+
+// CapturePointIndicator.a(alh) (xh.java:42-90): the sign shows the owner of
+// the point and the progress of a capture in 7 steps.
+void fo_look_koth(const FOWorld *world, float x, float y) {
+    const FOMode *m = &world->mode;
+    if (m->kind != FO_MODE_KOTH) return;
+    const FOSprite *base = &gCpOwner[m->owner == FO_TEAM_RED ? FO_TEAM_RED : m->owner == FO_TEAM_BLU ? FO_TEAM_BLU : 0];
+    if (base->w) fo_gfx_draw(base, x - 0.5f, y - 0.55f, 1.0f, 1.1f, 0, 0, 0, 0, FO_WHITE);
+    draw_cp_part(m->owner ? &gCpFill[m->owner][0] : &gCpGreyFill, x, y);
+    float a = m->progress;
+    int team;
+    if (m->owner == 0 && a > 0) {
+        team = FO_TEAM_RED;
+    } else if (m->owner == 0 && a < 0) {
+        a = -a;
+        team = FO_TEAM_BLU;
+    } else if (m->owner == FO_TEAM_RED) {
+        a = 100 - a;
+        team = FO_TEAM_BLU;
+    } else if (m->owner == FO_TEAM_BLU) {
+        a = 100 - fabsf(a);
+        team = FO_TEAM_RED;
+    } else {
+        team = 0;
+        a = 0;
+    }
+    if (fabsf(a) < 2.0f) a = 0;
+    if (!team || a <= 0) return;
+    // The step changes at most each 200 ms.
+    if (world->now - gCpTime >= 200 || world->now < gCpTime) {
+        gCpTime = world->now;
+        int step = 7 - (int)lroundf(a / 16.666666f);
+        if (step >= 8) step = 7;
+        if (step <= 0) step = 1;
+        gCpShown = gCpFill[team][step];
+    }
+    draw_cp_part(&gCpShown, x, y);
 }
