@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 (2026-10-18)
+
+- The bots of single player, ported from GANGFORT:
+  - each bot takes the class that its team has the least of, and the
+    team with fewer players,
+  - the bots walk and jump on the waypoint graphs of the three maps,
+    with the A* search of GANGFORT and its random routes,
+  - they see what fits in their view, aim with the arc of each weapon,
+    and stop when an enemy stands in the way,
+  - they play the objective of each mode: the hill, the bomb, and the
+    flags,
+  - the builder moves its sentry forward, the dealer heals and follows
+    its team and starts the uber, the camper waits on the camp spots,
+    and the agent disguises, waits, and backstabs.
+- The single player screen: the map, and 8, 10, or 12 players.
+- The team dialog and the class dialog of GANGFORT at the start of a
+  match, with the nine characters and their abilities.
+- The menu of a match: resume, change class, switch team, and quit.
+- A change of class out of the spawn room kills the player, and a change
+  of team kills a living player, as in GANGFORT.
+
 ## 0.5.0 (2026-10-18)
 
 - The game modes of the three maps:
