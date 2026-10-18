@@ -36,6 +36,8 @@ static struct {
     int localClass;
     short localTeam;
     int debugMove;
+    int aimHeld;             // j of aeb.java: the shoot stick was held in the last frame.
+    const char *icons[FO_BUTTON_COUNT];
     int debugShoot;
     float debugAim;
     int noVignette;           // A move of the debug build, or 0.
@@ -118,29 +120,113 @@ int fo_game_start(const char *apk_path, int width, int height) {
     return 1;
 }
 
+// The ability buttons of ControlsHUD.a(xn) (ahq.java:119-250): which ones
+// show, and their icons.
+static void update_buttons(FOPlayer *p, const char *icons[FO_BUTTON_COUNT]) {
+    FOWorld *world = G.map.world;
+    FOButton *ability = &G.controls.buttons[FO_BUTTON_ABILITY];
+    FOButton *second = &G.controls.buttons[FO_BUTTON_SECOND];
+    FOButton *third = &G.controls.buttons[FO_BUTTON_THIRD];
+    ability->shown = second->shown = third->shown = 0;
+    icons[FO_BUTTON_ABILITY] = icons[FO_BUTTON_SECOND] = icons[FO_BUTTON_THIRD] = NULL;
+    icons[FO_BUTTON_MENU] = "menu";
+    if (!p || !p->alive) return;
+    if (p->cls == FO_CLASS_ENGINEER) {
+        int blocked = fo_world_in_own_spawn(world, p) || fo_world_in_area(world, p, FO_AREA_NO_SENTRY);
+        int ready = p->sentry.active && fo_sentry_is_ready(world, &p->sentry);
+        if ((p->sentry.active && !ready) || (blocked && !p->sentry.active)) {
+            ability->shown = 0;
+        } else {
+            ability->shown = ready || p->steel >= 100.0f;
+        }
+        icons[FO_BUTTON_ABILITY] = p->sentry.active ? "destroy_sentry" : "build_sentry";
+    } else if (p->cls == FO_CLASS_SPY) {
+        ability->shown = 1;
+        icons[FO_BUTTON_ABILITY] = "toggle_cloak";
+        if (!p->cloaked) {
+            second->shown = 1;
+            icons[FO_BUTTON_SECOND] = "backstab";
+            int enemies = 0;
+            for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+                const FOPlayer *e = &world->players[i];
+                if (e->used && e->team != p->team && e->team != FO_TEAM_NONE && e->cls != 0) enemies++;
+            }
+            third->shown = !p->disguise.active && enemies > 0 && !p->backstab;
+            icons[FO_BUTTON_THIRD] = "disguise";
+        }
+    } else if (p->cls == FO_CLASS_MEDIC) {
+        ability->shown = p->uberCharge >= 20.0f;
+        icons[FO_BUTTON_ABILITY] = "uber_activate";
+    }
+}
+
 // GameScreen.render, section 1 (aeb.java:142-235), and the shot of the
 // single player controller (xa.java:52-55): the input of the local player.
 static void apply_input(FOPlayer *p) {
-    if (!p || !p->alive) return;
+    if (!p || !p->alive) {
+        G.aimHeld = 0;
+        return;
+    }
     FOWorld *world = G.map.world;
     if (fo_controls_jump(&G.controls)) fo_player_jump(world, p);
     p->move = G.debugMove ? G.debugMove : fo_controls_move(&G.controls);
     int touched = fo_controls_shoot_touched(&G.controls) || G.debugShoot;
-    int moved = fo_controls_shoot_moved(&G.controls);
-    if (moved && p->cls != FO_CLASS_SNIPER) {
-        fo_player_set_aim(p, fo_controls_shoot_angle(&G.controls));
-    } else if (G.debugShoot) {
-        fo_player_set_aim(p, G.debugAim);
+    int moved = fo_controls_shoot_moved(&G.controls) || G.debugShoot;
+    if (touched) {
+        // A touch of the stick sets the aim, even with no move of the knob.
+        float angle = G.debugShoot ? G.debugAim : fo_controls_shoot_angle(&G.controls);
+        if (!G.debugShoot && G.controls.shoot.dx == 0 && G.controls.shoot.dy == 0) angle = 0;
+        fo_player_set_aim(p, angle);
+        G.aimHeld = 1;
     } else {
+        // The sniper shoots when the finger leaves the stick, and the
+        // camera stays still for 420 ms (aeb.java:167-170).
+        if (G.aimHeld && p->cls == FO_CLASS_SNIPER && fo_player_can_shoot(world, p)) {
+            fo_player_shoot(world, p, p->weapon.angle * 0.017453292f);
+            G.camera.lockTime = 0.42f;
+        }
+        G.aimHeld = 0;
         fo_player_set_aim(p, 0);
     }
-    int shoot = 0;
-    if (touched) {
-        if (!moved && !G.debugShoot && !p->facingRight) fo_player_set_aim(p, 180);
-        // The input shoots only with ammo (aeb.java:183).
-        shoot = p->cls != FO_CLASS_SNIPER && p->weapon.ammo > 0;
-    }
+    // The other classes shoot while the knob is out a quarter of the base,
+    // and only with ammo (aeb.java:172-190).
+    int shoot = moved && p->cls != FO_CLASS_SNIPER && p->weapon.ammo > 0;
     if (shoot && fo_player_can_shoot(world, p)) fo_player_shoot(world, p, p->weapon.angle * 0.017453292f);
+    // The ability buttons.
+    if (fo_controls_take(&G.controls, FO_BUTTON_ABILITY)) fo_player_ability(world, p);
+    if (fo_controls_take(&G.controls, FO_BUTTON_SECOND) && p->cls == FO_CLASS_SPY) fo_player_backstab(world, p);
+    if (fo_controls_take(&G.controls, FO_BUTTON_THIRD) && p->cls == FO_CLASS_SPY) {
+        if (p->disguise.active) {
+            fo_player_undisguise(world, p);
+        } else {
+            fo_player_disguise(world, p, FO_LOCAL_ID);
+        }
+    }
+}
+
+// A tap on the world (aed.java): a medic heals the teammate under the
+// finger, in 8 m of the medic and 1.8 m of the tap.
+static void tap_world(float sx, float sy) {
+    FOPlayer *p = local_player();
+    if (!p || !p->alive || p->cls != FO_CLASS_MEDIC) return;
+    float wx = G.camera.shownX - G.camera.viewW / 2 + sx / G.width * G.camera.viewW;
+    float wy = G.camera.shownY - G.camera.viewH / 2 + sy / G.height * G.camera.viewH;
+    float px, py;
+    fo_player_position(p, &px, &py);
+    FOWorld *world = G.map.world;
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        FOPlayer *t = &world->players[i];
+        if (!t->used || !t->alive || t->id == p->id) continue;
+        if (t->team != p->team && !(t->cls == FO_CLASS_SPY && t->disguise.active)) continue;
+        float tx, ty;
+        fo_player_position(t, &tx, &ty);
+        float dm = sqrtf((tx - px) * (tx - px) + (ty - py) * (ty - py));
+        float dt = sqrtf((tx - wx) * (tx - wx) + (ty - wy) * (ty - wy));
+        if (dm <= 8.0f && dt <= 1.8f) {
+            fo_player_heal(world, p, t->id);
+            return;
+        }
+    }
 }
 
 static void draw_world(void) {
@@ -169,7 +255,8 @@ static void draw_hud(void) {
     float u = G.width / 281.0f;
     FOPlayer *p = local_player();
     fo_hud_draw(G.map.world, p, 0);
-    fo_controls_draw(&G.controls, &G.sprites, p ? p->team : FO_TEAM_BLU, p && p->cls == FO_CLASS_SNIPER, NULL);
+    update_buttons(p, G.icons);
+    fo_controls_draw(&G.controls, &G.sprites, p ? p->team : FO_TEAM_BLU, p && p->cls == FO_CLASS_SNIPER, G.icons);
     char text[128];
     snprintf(text, sizeof(text), "%.0f fps", G.fps);
     fo_font_draw(&G.pixel6, text, G.width - 3 * u, G.height - 3 * u, u * 0.5f, fo_rgb(0xffb866), FO_ALIGN_RIGHT);
@@ -211,7 +298,9 @@ void fo_game_frame(double dt) {
 }
 
 void fo_game_touch(int id, int phase, float x, float y) {
-    fo_controls_touch(&G.controls, id, phase, x, G.height - y);
+    if (!fo_controls_touch(&G.controls, id, phase, x, G.height - y) && phase == FO_TOUCH_BEGAN) {
+        tap_world(x, G.height - y);
+    }
 }
 
 void fo_game_debug(const char *command) {
