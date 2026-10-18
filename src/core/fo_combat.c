@@ -35,9 +35,8 @@ void fo_player_set_aim(FOPlayer *p, float degrees) {
     p->weapon.angle = a;
 }
 
-void fo_player_muzzle(const FOPlayer *p, float degrees, float *mx, float *my) {
+static void muzzle_of(const FOPlayer *p, const FOWeaponDef *def, float degrees, float *mx, float *my) {
     const FOArm *arm = fo_class_arm(p->cls);
-    const FOWeaponDef *def = p->weapon.def;
     float px, py;
     fo_player_position(p, &px, &py);
     float jx = arm->jx;
@@ -72,9 +71,13 @@ static float wall_report(void *context, FOPhysFixture *f, float px, float py, fl
     return 0;
 }
 
-static int muzzle_in_wall(FOWorld *world, const FOPlayer *p) {
+void fo_player_muzzle(const FOPlayer *p, float degrees, float *mx, float *my) {
+    muzzle_of(p, p->weapon.def, degrees, mx, my);
+}
+
+int fo_player_weapon_blocked(FOWorld *world, const FOPlayer *p, const FOWeaponDef *def, float degrees) {
     float mx, my, px, py;
-    fo_player_muzzle(p, p->weapon.angle, &mx, &my);
+    muzzle_of(p, def, degrees, &mx, &my);
     fo_player_position(p, &px, &py);
     float dx = mx - px, dy = my - py, len = sqrtf(dx * dx + dy * dy);
     if (len > 0) {
@@ -88,7 +91,7 @@ static int muzzle_in_wall(FOWorld *world, const FOPlayer *p) {
 
 int fo_player_can_shoot(FOWorld *world, const FOPlayer *p) {
     const FOWeapon *w = &p->weapon;
-    if (!w->def || !p->alive || muzzle_in_wall(world, p)) return 0;
+    if (!w->def || !p->alive || fo_player_weapon_blocked(world, p, w->def, w->angle)) return 0;
     // The authority does not test the ammo (alz.java:134-137).
     return world->now - w->lastShot >= w->def->interval;
 }

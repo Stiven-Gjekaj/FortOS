@@ -18,6 +18,9 @@ void fo_combat_update(FOWorld *world, float dt);
 void fo_combat_kill(FOWorld *world, FOPlayer *victim);
 void fo_combat_reset(FOPlayer *player);
 void fo_combat_drop(FOWorld *world, FOPlayer *player);
+// Weapon.i() (alz.java:141-151): a ray from the player to a point 0.3 m past
+// the muzzle of def at the angle meets a wall or a door.
+int fo_player_weapon_blocked(FOWorld *world, const FOPlayer *player, const FOWeaponDef *def, float degrees);
 // Spawns a projectile of the weapon def for the player owner.
 FOBullet *fo_combat_spawn(FOWorld *world, FOPlayer *owner, const FOWeaponDef *def, float x, float y, float vx,
                           float vy);

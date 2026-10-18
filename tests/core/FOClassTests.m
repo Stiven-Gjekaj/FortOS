@@ -246,3 +246,29 @@ FO_TEST(testClassSpyDisguise) {
     FO_EXPECT(!spy->disguise.active);
     fo_world_free(world);
 }
+
+FO_TEST(testClassSentryStopsWhileItsBuilderFacesAWall) {
+    // alt.java:51-53 and alz.java:141-151: the wall test of the sentry uses
+    // the arm of the builder and a muzzle 1 m to the right at the angle 0.
+    static const char *kWall =
+        "<map width=\"1\" height=\"1\" tilewidth=\"1000\" tileheight=\"300\">\n"
+        " <objectgroup name=\"collisions\">\n"
+        "  <object id=\"1\" x=\"0\" y=\"280\" width=\"1000\" height=\"20\"/>\n"
+        "  <object id=\"2\" x=\"600\" y=\"200\" width=\"10\" height=\"80\"/>\n"
+        " </objectgroup>\n"
+        "</map>\n";
+    FOWorld *world = fo_world_new(kWall, 5);
+    FOPlayer *eng = standing(world, 1, FO_TEAM_BLU, FO_CLASS_ENGINEER, 20);
+    fo_player_ability(world, eng);
+    run(world, 90);
+    fo_phys_body_set_transform(eng->obj.body, 59.3f, 3.5f, 0);
+    eng->facingRight = 0;
+    run(world, 30);
+    FOPlayer *e = standing(world, 2, FO_TEAM_RED, FO_CLASS_HEAVY, 27);
+    run(world, 120);
+    FO_EQUAL_INT((int)e->health, 300);
+    fo_phys_body_set_transform(eng->obj.body, 40, 3.5f, 0);
+    run(world, 120);
+    FO_EXPECT(e->health < 300);
+    fo_world_free(world);
+}

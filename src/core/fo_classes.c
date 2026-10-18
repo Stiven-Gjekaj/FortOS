@@ -325,7 +325,12 @@ static void sentry_update(FOWorld *world, FOSentry *s, float dt) {
         if (s->aim > s->want) s->aim = s->want;
     }
     const FOWeaponDef *gun = fo_weapon_def(FO_ITEM_SENTRY);
-    if (s->target && world->now - s->lastShot >= gun->interval && fabsf(s->want - s->aim) < 0.15f) {
+    // SentryGunWeapon.d() (alt.java:51-53) also asks Weapon.i(). That test
+    // takes the muzzle from the arm of the builder, at the angle 0 of the
+    // weapon of the sentry, so a builder near a wall stops his sentry.
+    FOPlayer *builder = fo_world_player(world, s->owner);
+    int blocked = builder && builder->alive && fo_player_weapon_blocked(world, builder, gun, 0);
+    if (s->target && !blocked && world->now - s->lastShot >= gun->interval && fabsf(s->want - s->aim) < 0.15f) {
         // SentryGunWeapon.a(float, boolean) and b(float): the muzzle is 1 m
         // along the turret from its pivot.
         float px = (sx - 1.7f / 2) + 0.4f + 0.5f, py = ((sy - 1.2f / 2) + 0.6f - 0.2f) + 0.6f;
