@@ -231,3 +231,27 @@ void fo_hud_draw(const FOWorld *world, const FOPlayer *local, float dt) {
     draw_kill_feed();
     if (local) draw_respawn(world, local);
 }
+
+void fo_hud_sniper(float x, float y, float angle, float charge) {
+    float u = gU;
+    // The aim line: 300 x 9 UI units at half alpha, 14 units out.
+    FOSprite line = sprite("sniper_aim_line");
+    if (line.w) {
+        float lw = line.w * u, lh = line.h * u;
+        float ox = 14 * u, oy = -lh / 2;
+        float px = x + ox * cosf(angle) - oy * sinf(angle), py = y + ox * sinf(angle) + oy * cosf(angle);
+        FOColor half = {1, 1, 1, 0.5f};
+        fo_gfx_draw(&line, px, py, lw, lh, 0, 0, angle, 0, half);
+    }
+    // The label "power" and the power icon, one of 5 steps of 20.
+    const char *text = fo_text_get(gTexts, "power");
+    float tw = fo_font_width(gFont, text, u), th = fo_font_line(gFont, u);
+    fo_font_draw(gFont, text, x - tw / 2, (y - th / 2 - u - th / 2) + th, u, fo_rgb(0xd9d9b7), FO_ALIGN_LEFT);
+    float c = charge < 0 ? 0 : charge > 100 ? 100 : charge;
+    int step = c >= 80 ? 4 : c >= 60 ? 3 : c >= 40 ? 2 : c >= 20 ? 1 : 0;
+    char name[32];
+    snprintf(name, sizeof(name), "sniperaim_power%d", step + 1);
+    FOSprite icon = sprite(name);
+    float iw = 9 * u, ih = 5 * u;
+    if (icon.w) fo_gfx_draw(&icon, x - iw / 2, u + (y - ih / 2) + ih / 2, iw, ih, 0, 0, 0, 0, FO_WHITE);
+}

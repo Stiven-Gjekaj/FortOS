@@ -19,4 +19,9 @@ void fo_hud_events(const FOWorld *world, int localId, float dt);
 // Draws the HUD of the local player. now is the world clock in seconds.
 void fo_hud_draw(const FOWorld *world, const FOPlayer *local, float dt);
 
+// SniperAimingHUD (ajp.java): the power of the shot and the aim line.
+// (x, y) is the point 1 m behind the scope, on the screen. angle is in
+// radians, and charge goes from 0 to 100.
+void fo_hud_sniper(float x, float y, float angle, float charge);
+
 #endif
