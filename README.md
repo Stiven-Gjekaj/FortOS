@@ -29,10 +29,10 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 ---
 
 > [!NOTE]
-> **Version 0.5.0 is out.** All 9 classes fight with their weapons and
-> abilities in the three game modes of single player: King of the Hill,
-> the bomb, and capture the flag, at 60 frames each second on the iPhone
-> 4S. The bots come in the next version. [TODO.md](TODO.md) lists the
+> **Version 0.6.0 is out.** Play single player against the bots of
+> GANGFORT on the three maps: King of the Hill, the bomb, and capture the
+> flag, with 8, 10, or 12 players, at 60 frames each second on the iPhone
+> 4S. The sounds come in the next version. [TODO.md](TODO.md) lists the
 > roadmap.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes of each release.
 
@@ -81,6 +81,24 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 <td width="50%" valign="top">
 <img src="assets/screenshots/roundover.png" alt="The round-over dialog: red team wins, the top 3 scores of each team, and your score">
 <p align="center"><i>The end of a round</i></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="assets/screenshots/bots.png" alt="Bots of both teams fight on the hill of gts_gantown, with the RED timer at 2:47">
+<p align="center"><i>The bots on the hill</i></p>
+</td>
+<td width="50%" valign="top">
+<img src="assets/screenshots/classes.png" alt="The class dialog: the nine characters in blue, the rusher selected, and its three lines of information">
+<p align="center"><i>The class dialog</i></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="assets/screenshots/teams.png" alt="The team dialog: a poster that says select your team, and a blue door and a red door with the number of players">
+<p align="center"><i>The team dialog</i></p>
+</td>
+<td width="50%" valign="top">
 </td>
 </tr>
 </table>
