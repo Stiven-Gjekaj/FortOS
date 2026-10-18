@@ -57,11 +57,11 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Add the charge and the scope shader of the camper.
 - Add the cloak, the disguise, and the backstab of the agent.
 
-## 0.5: the game modes
+## 0.5: the game modes (done, 2026-10-18)
 
-- Add the bomb mode on `bomb_canyon` and `gts_gantown`.
+- Add the bomb mode on `bomb_canyon`.
 - Add the capture the flag mode on `flag_egypt`.
-- Add King of the Hill.
+- Add King of the Hill on `gts_gantown`.
 - Add the round end, the team swap, and the points of the original.
 - Add the objective HUD and the round over dialog.
 
@@ -83,6 +83,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Add the kill cam.
 - Add the vignette shader.
 - Add the flies and the birds of the maps.
+- Add the classes that run on the bottom bar of the round-over dialog.
 
 ## 0.8: the menus and the items
 
