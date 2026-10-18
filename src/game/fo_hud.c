@@ -155,7 +155,9 @@ void fo_hud_events(const FOWorld *world, int localId, float dt) {
     for (int i = 0; i < gRowCount; i++) gRows[i].age += dt;
     for (int i = 0; i < world->event_count; i++) {
         const FOEvent *e = &world->events[i];
-        if (e->kind != FO_EVENT_KILL) continue;
+        // DeathList.a(...) (aic.java:90-91): a kill with no weapon, as a
+        // death with no damage, makes no row.
+        if (e->kind != FO_EVENT_KILL || e->item == 0) continue;
         const FOPlayer *target = NULL;
         for (int k = 0; k < FO_MAX_PLAYERS; k++) {
             if (world->players[k].used && world->players[k].id == e->b) target = &world->players[k];
