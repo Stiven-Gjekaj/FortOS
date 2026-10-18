@@ -43,6 +43,18 @@ static struct {
     int botsJoined;           // h of xa.java: the bots joined the match.
     FOMixer *mixer;
     int wasOver;              // The round was over in the last frame.
+    // The kill cam (aeb.java:237-286, 723-788).
+    int killcam;              // o
+    int captured;             // n: the frame of the kill cam is in snapshot.
+    float killStart;          // p
+    float deathAt;            // q: the time of the death, or 0.
+    int wasDead;              // r
+    int sentryKill;           // t: a sentry killed the local player.
+    int follow;               // The id of the player that the camera follows while dead.
+    float shotX, shotY;       // s: the killer on the screen.
+    FOTexture snapshot;
+    // The fade of the music (aeb.java:791-796).
+    float musicFrom, musicTo, musicStart, musicTime;
     FOLook looks[FO_MAX_PLAYERS];
     FOCamera camera;
     FOControls controls;
@@ -72,6 +84,21 @@ static void fail(const char *message) {
     fprintf(stderr, "fo_game: %s\n", message);
 }
 
+// GameScreen.a(float, long) (aeb.java:791-796): the music goes to volume
+// in the time.
+static float music_now(void) {
+    if (G.musicTime <= 0) return G.musicTo;
+    float t = (G.time - G.musicStart) / G.musicTime;
+    return (t < 1 ? t : 1) * (G.musicTo - G.musicFrom) + G.musicFrom;
+}
+
+static void music_fade(float volume, float seconds) {
+    G.musicFrom = music_now();
+    G.musicTo = volume;
+    G.musicStart = G.time;
+    G.musicTime = seconds;
+}
+
 const char *fo_game_error(void) {
     return G.error;
 }
@@ -92,6 +119,14 @@ static FOPlayer *local_player(void) {
 static int start_map(FOMapId id, int play) {
     fo_sound_stop_all();
     G.wasOver = 0;
+    G.killcam = 0;
+    G.deathAt = 0;
+    G.wasDead = 0;
+    G.follow = 0;
+    fo_hud_killcam(NULL);
+    fo_sound_fade(1.0f, 0);
+    // The music of a match (aeb.java:98-99).
+    music_fade(0.4f, 0);
     if (G.mapLoaded) fo_map_free(&G.map);
     G.mapLoaded = 0;
     double start = wall_seconds();
@@ -129,7 +164,9 @@ static int start_map(FOMapId id, int play) {
 // SingleplayerScreen (agv.java): the first screen.
 static void open_single(void) {
     fo_sound_stop_all();
-    fo_sound_music(1.0f);
+    music_fade(1.0f, 0);
+    G.killcam = 0;
+    fo_hud_killcam(NULL);
     if (G.mapLoaded) fo_map_free(&G.map);
     G.mapLoaded = 0;
     G.screen = FO_VIEW_SINGLE;
@@ -375,6 +412,89 @@ static void draw_hud(void) {
     fo_font_draw(&G.pixel6, text, G.width - 3 * u, G.height - 3 * u, u * 0.5f, fo_rgb(0xffb866), FO_ALIGN_RIGHT);
 }
 
+// GameScreen.a(boolean) (aeb.java:723-770): the kill cam starts 2 s after
+// the death, when the killer can be seen, and ends 2 s later.
+static void killcam_update(FOPlayer *p) {
+    FOWorld *w = G.map.world;
+    for (int i = 0; i < w->event_count; i++) {
+        const FOEvent *e = &w->events[i];
+        if (e->kind == FO_EVENT_KILL && e->b == FO_LOCAL_ID) G.sentryKill = e->item == FO_ITEM_SENTRY;
+    }
+    int dead = p && fo_player_waiting(p);
+    if (p && dead != G.wasDead) {
+        G.wasDead = dead;
+        if (dead) G.deathAt = G.time;
+        else G.follow = 0;
+    }
+    if (G.deathAt != 0 && G.time - G.deathAt >= 2.0f && !G.killcam && p) {
+        const FOPlayer *k = p->killer != FO_LOCAL_ID ? fo_world_player(w, p->killer) : NULL;
+        int hidden = k && k->cls == FO_CLASS_SPY && k->cloaked;
+        if (k && !hidden && !fo_mode_over(w) && !fo_mode_bomb_down(w) && (k->alive || k->corpse.active)) {
+            G.killcam = 1;
+            G.captured = 0;
+            G.killStart = G.time;
+            fo_sound_global("killzoom");
+            fo_hud_killcam(k->name);
+            fprintf(stderr, "killcam: %s\n", k->name);
+            music_fade(0.0f, 0.1f);
+            fo_sound_fade(0.0f, 0.1f);
+        }
+    }
+    if (G.killcam && (G.time - G.killStart >= 2.0f || fo_mode_bomb_down(w) || fo_mode_over(w))) {
+        G.killcam = 0;
+        G.deathAt = 0;
+        fo_hud_killcam(NULL);
+        fo_sound_fade(1.0f, 0.5f);
+        music_fade(0.4f, 0.5f);
+    }
+}
+
+// The first frame of the kill cam: the camera on the killer, and the frame
+// in the snapshot (aeb.java:251-275).
+static void killcam_capture(void) {
+    FOWorld *w = G.map.world;
+    const FOPlayer *p = local_player();
+    const FOPlayer *k = p ? fo_world_player(w, p->killer) : NULL;
+    float x = G.camera.shownX, y = G.camera.shownY;
+    G.follow = 0;
+    if (k) {
+        if (k->alive) {
+            fo_player_position(k, &x, &y);
+            G.follow = k->id;
+        } else if (k->corpse.obj.body) {
+            fo_phys_body_position(k->corpse.obj.body, &x, &y);
+        }
+        if (G.sentryKill && k->sentry.active && k->sentry.obj.body) {
+            fo_phys_body_position(k->sentry.obj.body, &x, &y);
+            G.follow = 0;
+        }
+    }
+    fo_camera_init(&G.camera, G.width, G.height, x, y);
+    fo_camera_update(&G.camera, 0, x, y, w->map.width, w->map.height);
+    draw_world();
+    fo_gfx_snapshot(&G.snapshot, G.width, G.height);
+    G.shotX = (x - (G.camera.shownX - G.camera.viewW / 2)) / G.camera.viewW * G.width;
+    G.shotY = (y - (G.camera.shownY - G.camera.viewH / 2)) / G.camera.viewH * G.height;
+    G.captured = 1;
+}
+
+// GameScreen.g() (aeb.java:771-788): the frame zooms in 130 ms to 2.5 times
+// on the killer.
+static void killcam_draw(void) {
+    float t = (G.time - G.killStart) / 0.13f;
+    if (t > 1) t = 1;
+    float zoom = 1.0f - 0.6f * t;
+    float W = (float)G.width, H = (float)G.height, fw = W * zoom, fh = H * zoom;
+    float cx = G.shotX, cy = G.shotY;
+    if (cx < fw / 2) cx = fw / 2;
+    if (cx > W - fw / 2) cx = W - fw / 2;
+    if (cy < fh / 2) cy = fh / 2;
+    if (cy > H - fh / 2) cy = H - fh / 2;
+    fo_gfx_view(cx - fw / 2, cy - fh / 2, cx + fw / 2, cy + fh / 2);
+    FOSprite s = {&G.snapshot, 0, 1, 1, 0, G.width, G.height};
+    fo_gfx_draw(&s, 0, 0, W, H, 0, 0, 0, 0, FO_WHITE);
+}
+
 void fo_game_frame(double dt) {
     fo_debug_poll(dt);
     G.time += (float)dt;
@@ -429,6 +549,13 @@ void fo_game_frame(double dt) {
         if (!fo_mode_bomb_down(world)) fo_camera_update(&G.camera, (float)dt, x, y, world->map.width, world->map.height);
     }
     FOWorld *w = G.map.world;
+    // The camera follows the killer after the kill cam (aeb.java:786).
+    const FOPlayer *f = G.follow ? fo_world_player(w, G.follow) : NULL;
+    if ((!p || !p->alive) && f && f->alive) {
+        float fx, fy;
+        fo_player_position(f, &fx, &fy);
+        fo_camera_update(&G.camera, (float)dt, fx, fy, w->map.width, w->map.height);
+    }
     for (int i = 0; i < w->event_count; i++) {
         const FOEvent *e = &w->events[i];
         if (e->kind == FO_EVENT_SHAKE) fo_camera_shake(&G.camera, e->item, e->value);
@@ -453,16 +580,27 @@ void fo_game_frame(double dt) {
     // The music: 0.4 in a match and 0 at the end of a round. The end plays
     // the sound of the victory or of the loss (aeb.java:325-345).
     int over = fo_mode_over(w);
-    fo_sound_music(over ? 0.0f : 0.4f);
-    if (over && !G.wasOver && p) {
-        fo_sound_global(p->team == fo_mode_winner(w) ? "game_over_victory" : "game_over_lost");
+    if (over && !G.wasOver) {
+        music_fade(0.0f, 0.1f);
+        if (p) fo_sound_global(p->team == fo_mode_winner(w) ? "game_over_victory" : "game_over_lost");
+    } else if (!over && G.wasOver) {
+        music_fade(0.4f, 1.0f);
     }
     G.wasOver = over;
+    killcam_update(p);
+    fo_sound_music(music_now());
     double t1 = wall_seconds();
     fo_gfx_begin(G.width, G.height, fo_rgb(0x000000));
-    draw_world();
-    draw_hud();
-    if (!G.noVignette) fo_gfx_vignette();
+    if (G.killcam) {
+        if (!G.captured) killcam_capture();
+        fo_gfx_begin(G.width, G.height, fo_rgb(0x000000));
+        killcam_draw();
+        draw_hud();
+    } else {
+        draw_world();
+        draw_hud();
+        if (!G.noVignette) fo_gfx_vignette();
+    }
     fo_gfx_view(0, 0, (float)G.width, (float)G.height);
     if (G.dialog == FO_DIALOG_TEAM) fo_team_draw(G.map.world);
     else if (G.dialog == FO_DIALOG_CLASS) fo_class_draw(G.map.world, (float)dt);
