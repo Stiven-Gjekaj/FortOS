@@ -35,6 +35,8 @@ static struct {
     int localClass;
     short localTeam;
     int debugMove;
+    int debugShoot;
+    float debugAim;
     int noVignette;           // A move of the debug build, or 0.
     double updateTime, drawTime;  // The sums of the times of the parts, for the speed log.
     // The speed log.
@@ -107,20 +109,29 @@ int fo_game_start(const char *apk_path, int width, int height) {
     return 1;
 }
 
-// GameScreen.render, section 1 (aeb.java:142-235): the input of the local
-// player.
+// GameScreen.render, section 1 (aeb.java:142-235), and the shot of the
+// single player controller (xa.java:52-55): the input of the local player.
 static void apply_input(FOPlayer *p) {
     if (!p || !p->alive) return;
-    if (fo_controls_jump(&G.controls)) fo_player_jump(G.map.world, p);
+    FOWorld *world = G.map.world;
+    if (fo_controls_jump(&G.controls)) fo_player_jump(world, p);
     p->move = G.debugMove ? G.debugMove : fo_controls_move(&G.controls);
-    if (fo_controls_shoot_moved(&G.controls) && p->cls != FO_CLASS_SNIPER) {
-        p->aim = fo_controls_shoot_angle(&G.controls);
+    int touched = fo_controls_shoot_touched(&G.controls) || G.debugShoot;
+    int moved = fo_controls_shoot_moved(&G.controls);
+    if (moved && p->cls != FO_CLASS_SNIPER) {
+        fo_player_set_aim(p, fo_controls_shoot_angle(&G.controls));
+    } else if (G.debugShoot) {
+        fo_player_set_aim(p, G.debugAim);
     } else {
-        p->aim = 0;
+        fo_player_set_aim(p, 0);
     }
-    if (fo_controls_shoot_touched(&G.controls) && !fo_controls_shoot_moved(&G.controls) && !p->facingRight) {
-        p->aim = 180;
+    int shoot = 0;
+    if (touched) {
+        if (!moved && !G.debugShoot && !p->facingRight) fo_player_set_aim(p, 180);
+        // The input shoots only with ammo (aeb.java:183).
+        shoot = p->cls != FO_CLASS_SNIPER && p->weapon.ammo > 0;
     }
+    if (shoot && fo_player_can_shoot(world, p)) fo_player_shoot(world, p, p->weapon.angle * 0.017453292f);
 }
 
 static void draw_player(const FOPlayer *p) {
@@ -210,4 +221,22 @@ void fo_game_debug(const char *command) {
     FOPlayer *p = local_player();
     if (sscanf(command, "move %d", &n) == 1) G.debugMove = n == FO_MOVE_STOP ? 0 : n;
     if (p && strncmp(command, "jump", 4) == 0) fo_player_jump(G.map.world, p);
+    float f;
+    if (sscanf(command, "shoot %f", &f) == 1) {
+        G.debugShoot = 1;
+        G.debugAim = f;
+    }
+    if (strncmp(command, "stop", 4) == 0) G.debugShoot = 0;
+    if (sscanf(command, "bot %d %d %f", &n, &n, &f) == 3) {
+        int team = 0, cls = 0;
+        sscanf(command, "bot %d %d %f", &team, &cls, &f);
+        static int nextId = 100;
+        FOPlayer *b = fo_world_add_player(G.map.world, nextId++, (short)team);
+        if (b) {
+            fo_world_spawn(G.map.world, b, cls);
+            float x, y;
+            fo_player_position(local_player(), &x, &y);
+            fo_phys_body_set_transform(b->obj.body, x + f, y + 1, 0);
+        }
+    }
 }
