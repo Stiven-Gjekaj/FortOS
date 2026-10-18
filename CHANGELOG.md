@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.0 (2026-10-18)
+
+- The game modes of the three maps:
+  - King of the Hill on `gts_gantown`: each team has 180 s on its timer,
+    the point turns at the speeds of GANGFORT, and a sign under the point
+    shows its owner and the capture.
+  - The bomb on `bomb_canyon`: RED rolls it, BLU rolls it back 7 s after
+    the last RED push, a slope needs two pushers, the gates stop a roll
+    back, and the round ends 4.5 s after the bomb falls into the pit.
+  - Capture the flag on `flag_egypt`: an enemy takes the flag, a carrier
+    cannot cloak or disguise, a dropped flag goes home after 30 s, and 4
+    captures win.
+- The points of the modes: 5 for a capture of the hill, 3 for a capture
+  of a flag, and 2 for each BLU player.
+- The end of a round: 15 s later a new round starts, each score goes to
+  0, and on the bomb map the teams change sides.
+- The objective HUD of each mode: the timers, and the captures with an
+  arrow to each flag.
+- The round-over dialog with the winner, the top 3 scores of each team,
+  and your score.
+- The uphill hint under the bomb, and the camera that follows the blast.
+- The controls and the bars hide while you are dead and at the end of a
+  round, as in GANGFORT.
+- Fix: the fills of the ammo bar and the health bar are drawn last, as in
+  GANGFORT.
+
 ## 0.4.0 (2026-10-18)
 
 - All 9 classes, with their weapons and abilities:
