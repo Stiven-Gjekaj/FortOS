@@ -57,6 +57,7 @@ typedef struct {
     int shakeMs;           // m: the camera shake of a shot.
     float shake;           // n
     int wallEffect;        // B: a hit on a wall makes the hit effect.
+    float w, h;            // The size of the weapon sprite in meters.
 } FOWeaponDef;
 
 // The weapon of the item id, or NULL.
@@ -71,6 +72,7 @@ typedef struct {
     float h, i;
     float jx, jy;
     float kx, ky;
+    float bodyW;           // The width of body_idle1, for the place of the arm.
 } FOArm;
 
 const FOArm *fo_class_arm(int cls);
