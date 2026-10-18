@@ -80,7 +80,6 @@ static void draw_weapon_info(const FOPlayer *p) {
     gShownHealth += (health - gShownHealth) * 0.2f;
     FOSprite empty = team_sprite(team, "weaponinfo_health_empty"), full = team_sprite(team, "weaponinfo_health_full");
     draw_stretched(&empty, x, y, healthW, healthH);
-    draw_clipped(&full, x, y, healthW, healthH, gShownHealth / max * healthW * 55 / 65 + healthW * 10 / 65);
     // The ammo bar.
     float ammoW = 60 * u, ammoH = 5 * u;
     float ax = x + 4 * u, ay = y - ammoH;
@@ -93,7 +92,6 @@ static void draw_weapon_info(const FOPlayer *p) {
         gShownAmmo += (ammo - gShownAmmo) * 0.2f;
         shown = gShownAmmo / p->weapon.def->ammo * ammoW * 56 / 60;
     }
-    draw_clipped(&afull, ax, ay, ammoW, ammoH, shown + ammoW * 4 / 60);
     // The label "ammo" on its background.
     const char *ammoText = fo_text_get(gTexts, "ammo");
     float lw = fo_font_width(gFont, ammoText, u), lh = fo_font_line(gFont, u);
@@ -129,6 +127,10 @@ static void draw_weapon_info(const FOPlayer *p) {
         draw_stretched(&bg, mx - 1.5f * u, my - u, mw + 2 * u, mh + u);
         label(text, mx, my, mh, fo_rgb(0xffb866));
     }
+    // The fills of the ammo bar and the health bar come last, as the actors
+    // p and o of ajt.java. The third bar covers the label "ammo".
+    draw_clipped(&afull, ax, ay, ammoW, ammoH, shown + ammoW * 4 / 60);
+    draw_clipped(&full, x, y, healthW, healthH, gShownHealth / max * healthW * 55 / 65 + healthW * 10 / 65);
 }
 
 // DeathList.a(...) (aic.java:76-107): a new row for each kill.
