@@ -77,6 +77,32 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   a jump. FortOS reads a clock that moves with each frame. Reason: the
   tests can then run a world for a given time with no wait.
 
+## The look
+
+- **The arm turns on the GPU** (0.3, 2026-10-18). The original turns the
+  left arm and the dead body at art resolution in a framebuffer of 64 x 64
+  pixels, so the pixels stay hard. Reason: one framebuffer pass for each
+  player in each frame is too slow on the A5. The arm is 2 pixels wide, so
+  the difference is small.
+- **The vignette and the scope have the numbers of the original shaders**,
+  but they run in other places: the vignette is one multiply pass over the
+  frame, and the scope shader makes the mask coordinate in the vertex
+  shader. Reason: speed on the A5.
+- **The pickup of a dropped weapon is a box.** The original uses a polygon
+  around the art of each weapon. Reason: the box only changes how the
+  weapon rolls.
+
+## The quirks of the original that stay
+
+- The ray of the sniper rifle ends at the point (cos, sin) x 300 of the
+  world, not 300 m from the muzzle (alw.java:89-90).
+- The revolver shoots from 1 m in front of the arm, because its muzzle is
+  not scaled (alq.java:18).
+- The backstab destroys any sentry in front of the spy, also a sentry of
+  its own team (xn.java:348-361).
+- The uber takes 3 each second, but the heal gives 1 back each second, so
+  an uber lasts 10 s while the medic heals.
+
 ## Identity
 
 - Bundle ID `io.github.stivengjekaj.fortos`, display name `FortOS`.
