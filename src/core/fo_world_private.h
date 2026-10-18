@@ -17,5 +17,6 @@ void fo_combat_contact(FOWorld *world, FOObj *a, FOObj *b, float px, float py);
 void fo_combat_update(FOWorld *world, float dt);
 void fo_combat_kill(FOWorld *world, FOPlayer *victim);
 void fo_combat_reset(FOPlayer *player);
+void fo_combat_drop(FOWorld *world, FOPlayer *player);
 
 #endif

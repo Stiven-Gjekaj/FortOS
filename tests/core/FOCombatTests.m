@@ -14,6 +14,7 @@ static const char *kFlat =
     " <objectgroup name=\"areas\">\n"
     "  <object id=\"3\" name=\"spawnarea_blu\" x=\"0\" y=\"200\" width=\"80\" height=\"80\"/>\n"
     "  <object id=\"4\" name=\"spawnarea_red\" x=\"920\" y=\"200\" width=\"80\" height=\"80\"/>\n"
+    "  <object id=\"5\" name=\"fridge_blu\" x=\"100\" y=\"240\" width=\"30\" height=\"40\"/>\n"
     " </objectgroup>\n"
     "</map>\n";
 
@@ -222,5 +223,40 @@ FO_TEST(testCombatCorpseFallsAndGoes) {
     FO_EXPECT(fabsf(y - 2.95f) < 0.1f);
     run(world, 60 * 8);
     FO_EXPECT(!e->corpse.active);
+    fo_world_free(world);
+}
+
+FO_TEST(testCombatFridgeRefills) {
+    FOWorld *world = fo_world_new(kFlat, 3);
+    FOPlayer *p = standing(world, 1, FO_TEAM_BLU, FO_CLASS_SOLDIER, 20);
+    p->health = 50;
+    p->weapon.ammo = 3;
+    // The fridge is at x 10 to 13 m.
+    fo_phys_body_set_transform(p->obj.body, 11.5f, 3, 0);
+    run(world, 2);
+    FO_EQUAL_INT((int)p->health, 200);
+    FO_EQUAL_INT((int)p->weapon.ammo, 20);
+    // The fridge of the other team does nothing.
+    FOPlayer *e = standing(world, 2, FO_TEAM_RED, FO_CLASS_SOLDIER, 25);
+    e->health = 50;
+    fo_phys_body_set_transform(e->obj.body, 11.5f, 3, 0);
+    run(world, 2);
+    FO_EQUAL_INT((int)e->health, 50);
+    fo_world_free(world);
+}
+
+FO_TEST(testCombatPickupGivesAmmo) {
+    FOWorld *world = fo_world_new(kFlat, 3);
+    FOPlayer *e = standing(world, 2, FO_TEAM_RED, FO_CLASS_HEAVY, 30);
+    fo_player_set_health(world, e, 0);
+    FO_EXPECT(e->pickup.active);
+    run(world, 60);
+    // A player of any team that walks over it gets 30 % of the full ammo.
+    FOPlayer *p = standing(world, 1, FO_TEAM_BLU, FO_CLASS_SOLDIER, 26);
+    p->weapon.ammo = 4;
+    p->move = FO_MOVE_RIGHT;
+    run(world, 90);
+    FO_EXPECT(!e->pickup.active);
+    FO_EQUAL_INT((int)p->weapon.ammo, 10);
     fo_world_free(world);
 }

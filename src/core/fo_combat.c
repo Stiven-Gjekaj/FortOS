@@ -190,9 +190,64 @@ static void bullet_hit(FOWorld *world, FOBullet *b, FOObj *other, float px, floa
     if (def->kind == FO_SHOT_ROCKET) rocket_jump(world, b, px, py);
 }
 
+// WeaponPickup.a(xn) (xx.java): the touch of a player.
+static void pickup_touch(FOWorld *world, FOPickup *k, FOPlayer *p) {
+    if (!k->active || !p->weapon.def) return;
+    p->weapon.ammo += p->weapon.def->ammo * 0.3f;
+    if (p->weapon.ammo > p->weapon.def->ammo) p->weapon.ammo = p->weapon.def->ammo;
+    k->active = 0;
+    fo_phys_body_set_active(k->obj.body, 0);
+    fo_phys_body_set_transform(k->obj.body, -5, -5, 0);
+    fo_world_event(world, FO_EVENT_SOUND, "item_gained", 0, 0);
+    world->events[world->event_count - 1].a = p->id;
+}
+
 void fo_combat_contact(FOWorld *world, FOObj *a, FOObj *b, float px, float py) {
     if (a->kind == FO_OBJ_BULLET) bullet_hit(world, (FOBullet *)a, b, px, py);
     if (b->kind == FO_OBJ_BULLET) bullet_hit(world, (FOBullet *)b, a, px, py);
+    if (a->kind == FO_OBJ_PICKUP && b->kind == FO_OBJ_PLAYER) pickup_touch(world, (FOPickup *)a, (FOPlayer *)b);
+    if (b->kind == FO_OBJ_PICKUP && a->kind == FO_OBJ_PLAYER) pickup_touch(world, (FOPickup *)b, (FOPlayer *)a);
+}
+
+// Weapon.w() (alz.java:366-372): the death drops the weapon at the place
+// where the player held it. FortOS gives the pickup a box of the size of
+// the weapon sprite. The original uses a polygon around the art.
+void fo_combat_drop(FOWorld *world, FOPlayer *p) {
+    const FOWeaponDef *def = p->weapon.def;
+    if (!def || def->w <= 0) return;
+    FOPickup *k = &p->pickup;
+    if (!k->obj.body) {
+        k->obj.kind = FO_OBJ_PICKUP;
+        k->obj.body = fo_phys_body_new(world->phys, FO_BODY_DYNAMIC, -5, -5, 0, &k->obj);
+    } else {
+        // A new weapon can have another size: make the body again.
+        fo_phys_body_free(world->phys, k->obj.body);
+        k->obj.body = fo_phys_body_new(world->phys, FO_BODY_DYNAMIC, -5, -5, 0, &k->obj);
+    }
+    k->obj.w = def->w;
+    k->obj.h = def->h;
+    FOFixtureDef box = {0.5f, 0.2f, 0, FO_CAT_PICKUP, 14, 0};
+    fo_phys_box(k->obj.body, def->w / 2, def->h / 2, 0, 0, 0, &box);
+    // The place of the weapon sprite (alz.java:71-94), without the bob.
+    const FOArm *arm = fo_class_arm(p->cls);
+    float X, Y;
+    fo_player_position(p, &X, &Y);
+    int s = p->facingRight ? 1 : -1;
+    float ax = s > 0 ? (arm->jx + arm->h) : (arm->bodyW - arm->jx - arm->h);
+    float Px = X - arm->bodyW / 2 + ax, Py = Y - p->obj.h / 2 + arm->jy + arm->ky;
+    float A = p->weapon.angle;
+    float phi = A * FO_DEG;
+    if (!p->facingRight && A == 0) phi = 3.1415927f;
+    float ox = def->hx, oy = s * def->hy;
+    float cx = Px + (float)(ox * cos(phi) - oy * sin(phi)), cy = Py + (float)(oy * cos(phi) + ox * sin(phi));
+    float rot = A + ((!p->facingRight && A != 0) ? 180 : 0);
+    fo_phys_body_set_active(k->obj.body, 1);
+    fo_phys_body_set_transform(k->obj.body, cx, cy, rot * FO_DEG);
+    fo_phys_body_set_velocity(k->obj.body, 0, 0);
+    fo_phys_body_set_awake(k->obj.body, 1);
+    k->active = 1;
+    k->def = def;
+    k->team = p->team;
 }
 
 // Bullet.a(float) and Weapon.a(xg, float): the bullet turns to its velocity

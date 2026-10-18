@@ -69,6 +69,7 @@ typedef enum {
     FO_OBJ_SENTRY,      // SentryGun (xu)
     FO_OBJ_BULLET,      // Bullet (xg)
     FO_OBJ_CORPSE,      // PlayerDeadBody (xs)
+    FO_OBJ_PICKUP,      // WeaponPickup (xx)
 } FOObjKind;
 
 // The head of each object with a body. The user data of the body points
@@ -129,6 +130,15 @@ typedef struct {
     int facingRight;         // n
 } FOCorpse;
 
+// WeaponPickup (xx.java): the weapon that a dead player drops. A touch
+// gives 30 % of the full ammo to the weapon of any player.
+typedef struct {
+    FOObj obj;
+    int active;
+    const FOWeaponDef *def;
+    short team;            // The team of the owner, for the sprite.
+} FOPickup;
+
 typedef struct FOPlayer {
     FOObj obj;
     int used;
@@ -154,6 +164,8 @@ typedef struct FOPlayer {
     int killer;              // q: the id of the last killer.
     int healer;              // The id of the medic that heals the player, or 0.
     FOCorpse corpse;
+    char name[24];           // The nickname (ai in xn.java).
+    FOPickup pickup;
 } FOPlayer;
 
 // A projectile (Bullet, xg.java).

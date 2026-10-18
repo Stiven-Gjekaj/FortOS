@@ -357,6 +357,7 @@ static void corpse_land(FOWorld *world, FOCorpse *c, FOObj *ground) {
 void fo_player_die(FOWorld *world, FOPlayer *p) {
     if (!p->alive) return;
     corpse_start(world, p);
+    fo_combat_drop(world, p);
     p->deathTime = world->now;
     p->alive = 0;
     p->health = 0;
@@ -568,12 +569,31 @@ static void jump_sounds(FOWorld *world, FOPlayer *p) {
     p->lastVy = vy;
 }
 
+// The fridge of the team (xn.java:384-392): full health and ammo. A rise
+// plays the sound of the fridge for the local player (aeb.java:415-424).
+static void fridge(FOWorld *world, FOPlayer *p) {
+    const FORect *r = fo_tmx_area(&world->map, p->team == FO_TEAM_RED ? FO_AREA_FRIDGE_RED : FO_AREA_FRIDGE_BLU);
+    if (!r) return;
+    float x, y;
+    fo_player_position(p, &x, &y);
+    if (!fo_rect_contains(r, x, y)) return;
+    float max = fo_class_health(p->cls);
+    int rose = p->health < max || (p->weapon.def && p->weapon.ammo < p->weapon.def->ammo);
+    fo_player_set_health(world, p, max);
+    if (p->weapon.def) p->weapon.ammo = p->weapon.def->ammo;
+    if (rose) {
+        fo_world_event(world, FO_EVENT_SOUND, "health_fridge", x, y);
+        world->events[world->event_count - 1].a = p->id;
+    }
+}
+
 static void player_update(FOWorld *world, FOPlayer *p, float dt) {
     (void)dt;
     touch_purge(&p->foot);
     touch_purge(&p->left);
     touch_purge(&p->right);
     if (!p->alive) return;
+    fridge(world, p);
     player_move(world, p);
     update_facing(p);
     jump_sounds(world, p);
