@@ -358,6 +358,57 @@ FOScreenResult fo_settings_tap(float x, float y) {
     return r;
 }
 
+// --- CustomizeTouchControlsScreen (adh.java) ------------------------------
+
+typedef struct {
+    float helpY;
+    FOBox box;               // The checkbox and its text.
+    FOBox reset;
+} FOSetupLayout;
+
+static FOSetupLayout setup_layout(void) {
+    FOSetupLayout l;
+    float u = gU, lh = text_h(S.pixel6);
+    float titleY = gH - big_h() - 3 * u;
+    l.helpY = titleY - lh - 9 * u;
+    const char *s = text("use_double_joysticks");
+    float w = 16 * u + 3 * u + text_w(S.pixel6, s), h = 14 * u > lh ? 14 * u : lh;
+    l.box = (FOBox){gW / 2 - w / 2, l.helpY - lh - 9 * u, w, h};
+    l.reset = (FOBox){gW - 19 * u - 9 * u, gH - 17 * u - 7 * u, 19 * u, 17 * u};
+    return l;
+}
+
+void fo_setup_draw(int sticks) {
+    float u = gU, lh = text_h(S.pixel6);
+    fo_gfx_begin((int)gW, (int)gH, (FOColor){0.1484375f, 0.13671875f, 0.1328125f, 1});
+    fo_gfx_view(0, 0, gW, gH);
+    const char *title = text("controls");
+    big_label(title, gW / 2 - big_w(title) / 2, gH - big_h() - 3 * u, 0xece4cc, 0xe1661e);
+    back_draw();
+    FOSetupLayout l = setup_layout();
+    const char *help = text("drag_and_drop");
+    label(S.pixel6, help, 0, l.helpY, gW, lh, 0xe7dec1, 1);
+    FOSprite box = ui(sticks ? "checkbox_checked" : "checkbox_unchecked");
+    image(&box, l.box.x, l.box.y, 16 * u, 14 * u);
+    const char *s = text("use_double_joysticks");
+    label(S.pixel6, s, l.box.x + 19 * u, l.box.y + 7 * u - lh / 2 - u, text_w(S.pixel6, s), lh, 0xe7dec2, 0);
+    FOSprite reset = ui("reset_button");
+    image(&reset, l.reset.x, l.reset.y, l.reset.w, l.reset.h);
+}
+
+FOScreenResult fo_setup_tap(float x, float y, int sticks) {
+    FOScreenResult r = {0};
+    FOSetupLayout l = setup_layout();
+    if (back_tap(x, y)) r.action = FO_SCREEN_BACK;
+    if (inside(x, y, l.reset.x, l.reset.y, l.reset.w, l.reset.h)) r.action = FO_SCREEN_CONTROLS_RESET;
+    if (inside(x, y, l.box.x, l.box.y, l.box.w, l.box.h)) {
+        r.action = FO_SCREEN_CONTROLS_STICKS;
+        r.value = !sticks;
+    }
+    r.click = r.action != FO_SCREEN_NONE;
+    return r;
+}
+
 // --- SingleplayerScreen (agv.java) ----------------------------------------
 
 const char *fo_single_map_name(int index) {

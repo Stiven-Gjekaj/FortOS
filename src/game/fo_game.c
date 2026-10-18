@@ -65,6 +65,7 @@ static struct {
     FOControls controls;
     int localClass;
     short localTeam;
+    short setupTeam;          // The colours of the control setup: a random team (adh.java:66).
     int debugMove;
     int aimHeld;
     FOTexture scopeMask;     // res/textures/sniper_aim_alpha_mask.png             // j of aeb.java: the shoot stick was held in the last frame.
@@ -81,7 +82,8 @@ static struct {
     int debugScore;
 } G;
 
-enum { FO_VIEW_SPLASH = 0, FO_VIEW_MAIN, FO_VIEW_CREDITS, FO_VIEW_SETTINGS, FO_VIEW_SINGLE, FO_VIEW_MATCH };
+enum { FO_VIEW_SPLASH = 0, FO_VIEW_MAIN, FO_VIEW_CREDITS, FO_VIEW_SETTINGS, FO_VIEW_CONTROLS, FO_VIEW_SINGLE,
+       FO_VIEW_MATCH };
 enum { FO_DIALOG_NONE = 0, FO_DIALOG_TEAM, FO_DIALOG_CLASS, FO_DIALOG_MENU };
 
 static void fail(const char *message) {
@@ -188,6 +190,7 @@ static void open_screen(int screen) {
     G.screen = screen;
     G.dialog = FO_DIALOG_NONE;
     if (screen == FO_VIEW_SINGLE) fo_single_open();
+    if (screen == FO_VIEW_CONTROLS) G.setupTeam = rand() % 2 ? FO_TEAM_RED : FO_TEAM_BLU;
     if (screen == FO_VIEW_SETTINGS) {
         int on[FO_SETTING_COUNT];
         for (int i = 0; i < FO_SETTING_COUNT; i++) on[i] = setting(kSettingPrefs[i]);
@@ -565,6 +568,10 @@ void fo_game_frame(double dt) {
         if (G.screen == FO_VIEW_MAIN) fo_main_draw();
         if (G.screen == FO_VIEW_CREDITS) fo_credits_draw();
         if (G.screen == FO_VIEW_SETTINGS) fo_settings_draw();
+        if (G.screen == FO_VIEW_CONTROLS) {
+            fo_setup_draw(!G.controls.arrows);
+            fo_controls_draw_edit(&G.controls, &G.sprites, G.setupTeam);
+        }
         if (G.screen == FO_VIEW_SINGLE) fo_single_draw((float)dt);
         fo_sound_music(music_now() * setting("theme_music_enabled"));
         fo_gfx_flush();
@@ -699,8 +706,25 @@ static void screen_action(FOScreenResult r) {
         fo_class_open(p ? p->cls : 0, p ? p->team : FO_TEAM_BLU);
         break;
     case FO_SCREEN_SWITCH_TEAM: G.dialog = FO_DIALOG_TEAM; break;
-    case FO_SCREEN_QUIT:
-    case FO_SCREEN_BACK: open_screen(FO_VIEW_MAIN); break;
+    case FO_SCREEN_QUIT: open_screen(FO_VIEW_MAIN); break;
+    case FO_SCREEN_BACK:
+        // The control setup saves the places and goes back to the settings
+        // (adh.java:105-109). The other screens go to the main menu.
+        if (G.screen == FO_VIEW_CONTROLS) {
+            fo_controls_save(&G.controls, &G.prefs);
+            if (!fo_prefs_save(&G.prefs)) fprintf(stderr, "prefs: cannot write %s\n", G.prefs.path);
+            open_screen(FO_VIEW_SETTINGS);
+        } else {
+            open_screen(FO_VIEW_MAIN);
+        }
+        break;
+    case FO_SCREEN_CONTROLS: open_screen(FO_VIEW_CONTROLS); break;
+    case FO_SCREEN_CONTROLS_RESET:
+        fo_controls_layout(&G.controls, G.width, G.height);
+        fo_controls_save(&G.controls, &G.prefs);
+        fo_prefs_save(&G.prefs);
+        break;
+    case FO_SCREEN_CONTROLS_STICKS: fo_controls_set_arrows(&G.controls, !r.value); break;
     case FO_SCREEN_SINGLE: open_screen(FO_VIEW_SINGLE); break;
     case FO_SCREEN_CREDITS: open_screen(FO_VIEW_CREDITS); break;
     case FO_SCREEN_SETTINGS: open_screen(FO_VIEW_SETTINGS); break;
@@ -715,6 +739,17 @@ static void screen_action(FOScreenResult r) {
 void fo_game_touch(int id, int phase, float x, float y) {
     float sy = G.height - y;
     if (G.screen != FO_VIEW_MATCH) {
+        if (G.screen == FO_VIEW_CONTROLS) {
+            if (phase == FO_TOUCH_BEGAN) {
+                FOScreenResult r = fo_setup_tap(x, sy, !G.controls.arrows);
+                if (r.action != FO_SCREEN_NONE) {
+                    screen_action(r);
+                    return;
+                }
+            }
+            fo_controls_edit_touch(&G.controls, id, phase, x, sy);
+            return;
+        }
         if (phase != FO_TOUCH_BEGAN) return;
         if (G.screen == FO_VIEW_MAIN) screen_action(fo_main_tap(x, sy));
         else if (G.screen == FO_VIEW_CREDITS) screen_action(fo_credits_tap(x, sy));
@@ -754,6 +789,7 @@ void fo_game_debug(const char *command) {
     if (strncmp(command, "mainmenu", 8) == 0) open_screen(FO_VIEW_MAIN);
     if (strncmp(command, "credits", 7) == 0) open_screen(FO_VIEW_CREDITS);
     if (strncmp(command, "settings", 8) == 0) open_screen(FO_VIEW_SETTINGS);
+    if (strncmp(command, "controls", 8) == 0) open_screen(FO_VIEW_CONTROLS);
     // The commands below need a match.
     if (!G.mapLoaded) return;
     FOPlayer *p = local_player();

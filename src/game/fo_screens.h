@@ -1,6 +1,7 @@
 // fo_screens: the screens and the dialogs around a match: SplashScreen
 // (ahe.java), MainMenuScreen (afk.java), CreditsScreen (adf.java),
-// SettingsScreen (ago.java), SingleplayerScreen (agv.java), TeamSelectionDialog (ajq.java),
+// SettingsScreen (ago.java), CustomizeTouchControlsScreen (adh.java),
+// SingleplayerScreen (agv.java), TeamSelectionDialog (ajq.java),
 // ClassSelectionDialog (ahl.java), and MenuDialog (aja.java). The units are
 // pixels of the screen with y up. One UI unit is 1/281 of the width.
 
@@ -40,6 +41,8 @@ typedef enum {
     FO_SCREEN_SETTINGS,
     FO_SCREEN_CONTROLS,      // Settings: open the control setup.
     FO_SCREEN_SETTING,       // Settings: a checkbox changed.
+    FO_SCREEN_CONTROLS_RESET,   // Control setup: the default places.
+    FO_SCREEN_CONTROLS_STICKS,  // Control setup: value is 1 for two sticks.
 } FOScreenAction;
 
 // The checkboxes of the settings screen, from the bottom.
@@ -73,6 +76,11 @@ FOScreenResult fo_credits_tap(float x, float y);
 void fo_settings_open(const int on[FO_SETTING_COUNT]);
 void fo_settings_draw(void);
 FOScreenResult fo_settings_tap(float x, float y);
+
+// CustomizeTouchControlsScreen: the title, the help, the checkbox of the
+// two sticks, and the reset button. The game draws the controls over it.
+void fo_setup_draw(int sticks);
+FOScreenResult fo_setup_tap(float x, float y, int sticks);
 
 // SingleplayerScreen. The maps are in the order of the original:
 // flag_egypt, bomb_canyon, gts_gantown.
