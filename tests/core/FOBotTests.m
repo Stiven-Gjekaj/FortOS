@@ -101,6 +101,29 @@ FO_TEST(testClassChangeOutOfTheSpawnRoomKills) {
     fo_world_free(world);
 }
 
+FO_TEST(testTeamChangeKillsALivingPlayer) {
+    FOWorld *world = newWorld(nil);
+    FOPlayer *p = fo_world_add_player(world, 1, FO_TEAM_NONE);
+    // A player with no team and no class joins at once.
+    fo_world_change_team(world, p, FO_TEAM_BLU);
+    FO_EQUAL_INT(p->team, FO_TEAM_BLU);
+    FO_EXPECT(!p->alive);
+    fo_world_change_class(world, p, FO_CLASS_SOLDIER);
+    FO_EXPECT(p->alive);
+    run(world, NULL, 0.5f);
+    // A change of team kills the player, and it spawns 10 s later in the new
+    // room.
+    fo_world_change_team(world, p, FO_TEAM_RED);
+    FO_EXPECT(!p->alive);
+    FO_EQUAL_INT(p->team, FO_TEAM_RED);
+    run(world, NULL, 10.1f);
+    FO_EXPECT(p->alive);
+    float x, y;
+    fo_player_position(p, &x, &y);
+    FO_EXPECT(x > 92.0f);
+    fo_world_free(world);
+}
+
 // --- The bots ---------------------------------------------------------------
 
 FO_TEST(testBotsFillTheTeamsWithDifferentClasses) {

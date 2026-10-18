@@ -1225,6 +1225,15 @@ void fo_world_change_class(FOWorld *world, FOPlayer *p, int cls) {
     p->cls = cls;
 }
 
+void fo_world_change_team(FOWorld *world, FOPlayer *p, short team) {
+    if (p->team == team) return;
+    // The team difference limit of single player is 420, so it never stops
+    // a change.
+    fo_world_set_team(world, p, team);
+    fo_classes_reset(world, p, 0);
+    if (team != FO_TEAM_NONE && p->alive) fo_player_die(world, p);
+}
+
 // BotController.x() (zm.java:84-116): a class of the smallest number in
 // the team.
 static void choose_class(FOBots *bots, FOWorld *world, FOBot *bot, FOPlayer *p) {

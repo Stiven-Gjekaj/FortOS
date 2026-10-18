@@ -114,4 +114,8 @@ void fo_bots_update(FOBots *bots, FOWorld *world, float dt);
 // In the own spawn room it spawns at once. Out of it, it dies.
 void fo_world_change_class(FOWorld *world, FOPlayer *player, int cls);
 
+// GameServer.a(xn, 16) (ws.java:90-122): the player joins the team. The
+// abilities reset, and a living player dies.
+void fo_world_change_team(FOWorld *world, FOPlayer *player, short team);
+
 #endif
