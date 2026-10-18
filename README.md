@@ -29,9 +29,10 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 ---
 
 > [!NOTE]
-> **Version 0.1.0 is out.** It shows the gantown map at 60 frames each
-> second on the iPhone 4S. The fights, the classes, the game modes, and the
-> bots come in the next versions. [TODO.md](TODO.md) lists them.
+> **Version 0.2.0 is out.** A player walks and jumps on the three maps
+> of single player with the touch sticks of GANGFORT, at 60 frames each
+> second on the iPhone 4S. The fights, the classes, the game modes, and
+> the bots come in the next versions. [TODO.md](TODO.md) lists them.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes of each release.
 
 > [!IMPORTANT]
@@ -49,6 +50,16 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 <td width="50%" valign="top">
 <img src="assets/screenshots/classes.png" alt="The nine classes of the blue team in a row in a dark tunnel">
 <p align="center"><i>The nine classes</i></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="assets/screenshots/bomb_canyon.png" alt="The spawn room of the blue team on a rock in bomb_canyon, with the two touch sticks">
+<p align="center"><i>bomb_canyon</i></p>
+</td>
+<td width="50%" valign="top">
+<img src="assets/screenshots/flag_egypt.png" alt="The blue spawn room in the pyramid of flag_egypt, between two spawn doors">
+<p align="center"><i>flag_egypt</i></p>
 </td>
 </tr>
 </table>
