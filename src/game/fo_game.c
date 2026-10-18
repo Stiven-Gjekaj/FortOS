@@ -131,6 +131,18 @@ static void loadouts_load(void) {
     fo_screens_loadouts(G.loadouts);
 }
 
+static void loadouts_save(void) {
+    char key[48];
+    for (int c = 1; c <= 9; c++) {
+        snprintf(key, sizeof(key), "loadout_%d_hat", c);
+        fo_prefs_set_int(&G.prefs, key, G.loadouts[c].hat);
+        snprintf(key, sizeof(key), "loadout_%d_weapon", c);
+        fo_prefs_set_int(&G.prefs, key, G.loadouts[c].weapon);
+    }
+    if (!fo_prefs_save(&G.prefs)) fprintf(stderr, "prefs: cannot write %s\n", G.prefs.path);
+    fo_screens_loadouts(G.loadouts);
+}
+
 static const char *const kSettingPrefs[FO_SETTING_COUNT] = {"killcam_enabled", "theme_music_enabled",
                                                             "vignette_enabled"};
 
@@ -835,6 +847,14 @@ void fo_game_debug(const char *command) {
         start_map(G.mapLoaded ? G.map.id : FO_MAP_GANTOWN, 1);
     }
     if (strncmp(command, "single", 6) == 0) open_single();
+    int hat, weapon;
+    if (sscanf(command, "loadout %d %d %d", &n, &hat, &weapon) == 3 && n >= 1 && n <= 9) {
+        FOPlayer check;
+        memset(&check, 0, sizeof(check));
+        fo_player_set_loadout(&check, n, hat, weapon);
+        G.loadouts[n] = check.loadout[n];
+        loadouts_save();
+    }
     if (strncmp(command, "mainmenu", 8) == 0) open_screen(FO_VIEW_MAIN);
     if (strncmp(command, "credits", 7) == 0) open_screen(FO_VIEW_CREDITS);
     if (strncmp(command, "settings", 8) == 0) open_screen(FO_VIEW_SETTINGS);
@@ -847,6 +867,7 @@ void fo_game_debug(const char *command) {
     if (p && strncmp(command, "backstab", 8) == 0) fo_player_backstab(G.map.world, p);
     if (p && strncmp(command, "disguise", 8) == 0) fo_player_disguise(G.map.world, p, FO_LOCAL_ID);
     if (p && sscanf(command, "heal %d", &n) == 1) fo_player_heal(G.map.world, p, n);
+    if (p && strncmp(command, "die", 3) == 0) fo_player_set_health(G.map.world, p, 0);
     if (p && strncmp(command, "dump", 4) == 0) {
         float x, y;
         fo_player_position(p, &x, &y);
@@ -856,6 +877,10 @@ void fo_game_debug(const char *command) {
         if (se->obj.body) fo_phys_body_position(se->obj.body, &x, &y);
         fprintf(stderr, "dump: sentry active %d landed %d built %lld at %.2f %.2f health %.0f\n", se->active,
                 se->landed, se->built, x, y, se->health);
+        const FOFallenHat *fh = &p->fallenHat;
+        if (fh->obj.body) fo_phys_body_position(fh->obj.body, &x, &y);
+        fprintf(stderr, "dump: hat %d placed %d at %.2f %.2f fallen %d at %.2f %.2f\n", p->hat, p->hatPlaced, p->hatX,
+                p->hatY, fh->active, fh->obj.body ? x : 0, fh->obj.body ? y : 0);
         const FOMode *md = &G.map.world->mode;
         for (int t = 1; t <= 2 && md->kind == FO_MODE_CTF; t++) {
             fo_phys_body_position(md->flags[t].obj.body, &x, &y);
