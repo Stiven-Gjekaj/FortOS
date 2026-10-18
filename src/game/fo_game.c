@@ -6,40 +6,41 @@
 #include <string.h>
 #include <sys/time.h>
 #include "fo_assets.h"
+#include "fo_camera.h"
+#include "fo_controls.h"
 #include "fo_debug.h"
 #include "fo_font.h"
 #include "fo_gfx.h"
-#include "fo_layer.h"
+#include "fo_maps.h"
+#include "fo_world.h"
 
 // The size of one art pixel in meters, as GANGFORT draws each region.
 #define FO_ART 0.1f
-// The width of the view of the world in meters (GameCamera, wp.java:26).
-#define FO_VIEW_W 22.1875f
+// The id of the local player in single player (xa.java:24).
+#define FO_LOCAL_ID 69
 
-static const char *kClassNames[9] = {"scout", "soldier", "pyro", "demoman", "heavy",
-                                     "engineer", "medic", "sniper", "spy"};
+static const char *kClassNames[10] = {"", "scout", "soldier", "pyro", "demoman", "heavy",
+                                      "engineer", "medic", "sniper", "spy"};
 
 static struct {
     char error[512];
     int width, height;
     float time;
     FOAtlasTextures sprites;
-    FOAtlasTextures map;
     FOFont pixel6, pixel12;
-    // The camera center in meters, and the size of the map.
-    float camX, camY;
-    float mapW, mapH;
-    float cloudX, cloudSpeed;
-    // The drag of the camera.
-    int dragging;
-    float dragX, dragY;
+    FOMap map;
+    int mapLoaded;
+    FOCamera camera;
+    FOControls controls;
+    int localClass;
+    short localTeam;
+    int debugMove;
+    int noVignette;           // A move of the debug build, or 0.
+    double updateTime, drawTime;  // The sums of the times of the parts, for the speed log.
     // The speed log.
     float fpsTime;
     int fpsFrames;
     float fps;
-    // The switches of the debug build, to measure the cost of each part.
-    int noVignette;
-    int layerMask;
 } G;
 
 static void fail(const char *message) {
@@ -57,12 +58,35 @@ static double wall_seconds(void) {
     return now.tv_sec + now.tv_usec / 1e6;
 }
 
+static FOPlayer *local_player(void) {
+    return G.mapLoaded ? fo_world_player(G.map.world, FO_LOCAL_ID) : NULL;
+}
+
+// Loads the map and spawns the local player in it.
+static int start_map(FOMapId id) {
+    if (G.mapLoaded) fo_map_free(&G.map);
+    G.mapLoaded = 0;
+    double start = wall_seconds();
+    if (!fo_map_load(&G.map, id, (unsigned int)(start * 1000))) return 0;
+    G.mapLoaded = 1;
+    FOPlayer *p = fo_world_add_player(G.map.world, FO_LOCAL_ID, G.localTeam);
+    fo_world_spawn(G.map.world, p, G.localClass);
+    float x, y;
+    fo_player_position(p, &x, &y);
+    fo_camera_init(&G.camera, G.width, G.height, x, y);
+    fprintf(stderr, "map %s: %.3f s, textures %.1f MB\n", fo_map_name(id), wall_seconds() - start,
+            fo_assets_texture_bytes() / 1048576.0);
+    return 1;
+}
+
 int fo_game_start(const char *apk_path, int width, int height) {
     freopen("/tmp/FortOS.log", "w", stderr);
     setvbuf(stderr, NULL, _IOLBF, 0);
     double start = wall_seconds();
     G.width = width;
     G.height = height;
+    G.localClass = FO_CLASS_SOLDIER;
+    G.localTeam = FO_TEAM_BLU;
     if (!fo_assets_open(apk_path)) {
         fail("Copy the APK of GANGFORT 2.1 from your copy of the game to\n"
              "/var/mobile/Media/FortOS/GANGFORT.apk\n\n"
@@ -73,83 +97,63 @@ int fo_game_start(const char *apk_path, int width, int height) {
         fail("OpenGL ES 2.0 does not start.");
         return 0;
     }
-    if (!fo_assets_atlas(&G.sprites, "textures/sprites.atlas") ||
-        !fo_assets_atlas_cells(&G.map, "maps/gts_gantown/gantown.atlas", 1) || !fo_font_load(&G.pixel6, "fonts/pixel6.fnt") ||
-        !fo_font_load(&G.pixel12, "fonts/pixel12.fnt")) {
+    if (!fo_assets_atlas(&G.sprites, "textures/sprites.atlas") || !fo_font_load(&G.pixel6, "fonts/pixel6.fnt") ||
+        !fo_font_load(&G.pixel12, "fonts/pixel12.fnt") || !start_map(FO_MAP_GANTOWN)) {
         fail("The APK does not hold the files of GANGFORT 2.1.");
         return 0;
     }
-    FOSprite main = fo_assets_sprite(&G.map, "main");
-    G.mapW = main.w * FO_ART;
-    G.mapH = main.h * FO_ART;
-    G.camX = 20;
-    G.camY = 12;
-    G.cloudX = G.mapW;
-    G.cloudSpeed = 0.5f;
-    fprintf(stderr, "start: %.3f s, textures %.1f MB\n", wall_seconds() - start,
-            fo_assets_texture_bytes() / 1048576.0);
+    fo_controls_layout(&G.controls, width, height);
+    fprintf(stderr, "start: %.3f s\n", wall_seconds() - start);
     return 1;
 }
 
-static float view_h(void) {
-    return FO_VIEW_W * G.height / G.width;
-}
-
-static void clamp_camera(void) {
-    float hw = FO_VIEW_W / 2, hh = view_h() / 2;
-    if (G.camX < hw) G.camX = hw;
-    if (G.camX > G.mapW - hw) G.camX = G.mapW - hw;
-    if (G.camY < hh) G.camY = hh;
-    if (G.camY > G.mapH - hh) G.camY = G.mapH - hh;
-}
-
-// The layers of GTS_Gantown (acp.java) from the back to the front, with the
-// parallax of the background and the silos.
-enum { LAYER_BG, LAYER_CLOUDS, LAYER_SILOS, LAYER_MAIN, LAYER_PLATFORMS, LAYER_FRONT, LAYER_COUNT };
-static const char *kLayers[LAYER_COUNT] = {"bg", "clouds", "silos", "main", "platforms", "spawnbasesfront"};
-
-static void draw_layers(int first, int last, float left, float bottom, float right, float top) {
-    float xs[LAYER_COUNT] = {-G.camX * 0.03f, G.cloudX, -G.camX * 0.025f, 0, 0, 0};
-    for (int pass = FO_PASS_OPAQUE; pass <= FO_PASS_BLEND; pass++) {
-        for (int i = first; i <= last; i++) {
-            if (G.layerMask & (1 << i)) continue;
-            FOLayer layer = fo_assets_layer(&G.map, kLayers[i]);
-            // The nearer layer has the smaller depth.
-            fo_layer_draw(&layer, pass, xs[i], 0, FO_ART, 0.9f - i * 0.1f, left, bottom, right, top);
-        }
+// GameScreen.render, section 1 (aeb.java:142-235): the input of the local
+// player.
+static void apply_input(FOPlayer *p) {
+    if (!p || !p->alive) return;
+    if (fo_controls_jump(&G.controls)) fo_player_jump(G.map.world, p);
+    p->move = G.debugMove ? G.debugMove : fo_controls_move(&G.controls);
+    if (fo_controls_shoot_moved(&G.controls) && p->cls != FO_CLASS_SNIPER) {
+        p->aim = fo_controls_shoot_angle(&G.controls);
+    } else {
+        p->aim = 0;
     }
+    if (fo_controls_shoot_touched(&G.controls) && !fo_controls_shoot_moved(&G.controls) && !p->facingRight) {
+        p->aim = 180;
+    }
+}
+
+static void draw_player(const FOPlayer *p) {
+    if (!p->alive) return;
+    char name[64];
+    snprintf(name, sizeof(name), "%s_%s_armsoverhead", p->team == FO_TEAM_RED ? "red" : "blu", kClassNames[p->cls]);
+    FOSprite s = fo_assets_sprite(&G.sprites, name);
+    float x, y;
+    fo_player_position(p, &x, &y);
+    float w = s.w * FO_ART, h = s.h * FO_ART;
+    fo_gfx_draw(&s, x - w / 2, y - 0.95f, w, h, 0, 0, 0, !p->facingRight, FO_WHITE);
 }
 
 static void draw_world(void) {
-    float hw = FO_VIEW_W / 2, hh = view_h() / 2;
-    float left = G.camX - hw, bottom = G.camY - hh, right = G.camX + hw, top = G.camY + hh;
+    float hw = G.camera.viewW / 2, hh = G.camera.viewH / 2;
+    float left = G.camera.shownX - hw, bottom = G.camera.shownY - hh;
+    float right = G.camera.shownX + hw, top = G.camera.shownY + hh;
     fo_gfx_view(left, bottom, right, top);
-    draw_layers(LAYER_BG, LAYER_PLATFORMS, left, bottom, right, top);
-    // A row of the nine classes of each team, in front of the platforms.
-    fo_gfx_depth(FO_DEPTH_OFF, 0);
-    for (int team = 0; team < 2; team++) {
-        for (int i = 0; i < 9; i++) {
-            char name[64];
-            snprintf(name, sizeof(name), "%s_%s_armsoverhead", team ? "red" : "blu", kClassNames[i]);
-            FOSprite s = fo_assets_sprite(&G.sprites, name);
-            float x = 14 + i * 2.2f + team * 22;
-            fo_gfx_draw(&s, x, 9.6f, s.w * FO_ART, s.h * FO_ART, 0, 0, 0, team, FO_WHITE);
-        }
+    fo_map_draw_back(&G.map, &G.sprites, G.camera.shownX, left, bottom, right, top);
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        if (G.map.world->players[i].used) draw_player(&G.map.world->players[i]);
     }
-    draw_layers(LAYER_FRONT, LAYER_FRONT, left, bottom, right, top);
-    fo_gfx_depth(FO_DEPTH_OFF, 0);
+    fo_map_draw_front(&G.map, &G.sprites, left, bottom, right, top);
 }
 
 static void draw_hud(void) {
     fo_gfx_view(0, 0, (float)G.width, (float)G.height);
-    // One UI pixel is 1/281 of the width of the screen, as in GANGFORT.
     float u = G.width / 281.0f;
+    FOPlayer *p = local_player();
+    fo_controls_draw(&G.controls, &G.sprites, p ? p->team : FO_TEAM_BLU, p && p->cls == FO_CLASS_SNIPER, NULL);
     char text[128];
-    snprintf(text, sizeof(text), "fortos 0.1\n%.0f fps  %.1f mb  %d calls", G.fps,
-             fo_assets_texture_bytes() / 1048576.0, fo_gfx_draw_calls());
-    fo_font_draw(&G.pixel6, text, 4 * u, G.height - 3 * u, u * 0.5f, fo_rgb(0xffb866), FO_ALIGN_LEFT);
-    fo_font_draw(&G.pixel12, "drag to move the camera", G.width / 2.0f, 12 * u, u * 0.5f, FO_WHITE,
-                 FO_ALIGN_CENTER);
+    snprintf(text, sizeof(text), "%.0f fps", G.fps);
+    fo_font_draw(&G.pixel6, text, G.width - 3 * u, G.height - 3 * u, u * 0.5f, fo_rgb(0xffb866), FO_ALIGN_RIGHT);
 }
 
 void fo_game_frame(double dt) {
@@ -159,48 +163,51 @@ void fo_game_frame(double dt) {
     G.fpsTime += (float)dt;
     if (G.fpsTime >= 1) {
         G.fps = G.fpsFrames / G.fpsTime;
-        fprintf(stderr, "fps %.1f calls %d\n", G.fps, fo_gfx_draw_calls());
+        fprintf(stderr, "fps %.1f calls %d update %.2f ms draw %.2f ms\n", G.fps, fo_gfx_draw_calls(),
+                G.updateTime * 1000 / G.fpsFrames, G.drawTime * 1000 / G.fpsFrames);
+        G.updateTime = G.drawTime = 0;
         G.fpsFrames = 0;
         G.fpsTime = 0;
     }
-    // The clouds go to the left and start again at the right edge.
-    G.cloudX -= G.cloudSpeed * (float)dt;
-    FOSprite clouds = fo_assets_sprite(&G.map, "clouds");
-    if (G.cloudX < -clouds.w * FO_ART) {
-        G.cloudX = G.mapW;
-        G.cloudSpeed = (1 + rand() % 10) * 0.1f;
+    double t0 = wall_seconds();
+    FOPlayer *p = local_player();
+    apply_input(p);
+    fo_world_update(G.map.world, (float)dt);
+    fo_map_update(&G.map, (float)dt);
+    if (p && p->alive) {
+        float x, y;
+        fo_player_position(p, &x, &y);
+        fo_camera_update(&G.camera, (float)dt, x, y, G.map.world->map.width, G.map.world->map.height);
     }
-    clamp_camera();
-    fo_gfx_begin(G.width, G.height, fo_rgb(0x26231f));
+    double t1 = wall_seconds();
+    fo_gfx_begin(G.width, G.height, fo_rgb(0x000000));
     draw_world();
     draw_hud();
     if (!G.noVignette) fo_gfx_vignette();
     fo_gfx_flush();
+    G.updateTime += t1 - t0;
+    G.drawTime += wall_seconds() - t1;
 }
 
 void fo_game_touch(int id, int phase, float x, float y) {
-    (void)id;
-    y = G.height - y;
-    float metersPerPixel = FO_VIEW_W / G.width;
-    if (phase == FO_TOUCH_BEGAN) {
-        G.dragging = 1;
-    } else if (phase == FO_TOUCH_MOVED && G.dragging) {
-        G.camX -= (x - G.dragX) * metersPerPixel;
-        G.camY -= (y - G.dragY) * metersPerPixel;
-    } else if (phase == FO_TOUCH_ENDED) {
-        G.dragging = 0;
-    }
-    G.dragX = x;
-    G.dragY = y;
+    fo_controls_touch(&G.controls, id, phase, x, G.height - y);
 }
 
 void fo_game_debug(const char *command) {
-    float x, y;
     int n;
+    char name[32];
     if (sscanf(command, "vignette %d", &n) == 1) G.noVignette = !n;
-    if (sscanf(command, "hide %d", &n) == 1) G.layerMask = n;
-    if (sscanf(command, "camera %f %f", &x, &y) == 2) {
-        G.camX = x;
-        G.camY = y;
+    if (sscanf(command, "map %d", &n) == 1 && n >= 0 && n < FO_MAP_COUNT) start_map((FOMapId)n);
+    if (sscanf(command, "class %d", &n) == 1 && n >= 1 && n <= 9) {
+        G.localClass = n;
+        FOPlayer *p = local_player();
+        if (p) fo_world_spawn(G.map.world, p, n);
     }
+    if (sscanf(command, "team %31s", name) == 1) {
+        G.localTeam = strcmp(name, "red") == 0 ? FO_TEAM_RED : FO_TEAM_BLU;
+        start_map(G.map.id);
+    }
+    FOPlayer *p = local_player();
+    if (sscanf(command, "move %d", &n) == 1) G.debugMove = n == FO_MOVE_STOP ? 0 : n;
+    if (p && strncmp(command, "jump", 4) == 0) fo_player_jump(G.map.world, p);
 }
