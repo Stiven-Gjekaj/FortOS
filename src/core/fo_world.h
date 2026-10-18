@@ -111,7 +111,8 @@ typedef struct FOPlayer {
     long long landTime;      // The time of the last landing, for the squat frame.
     int jumpSoundUp, jumpSoundDouble;  // an and ap: the jump sounds played.
     float lastVy;            // ao
-    long long deathTime;     // B: the time of death.
+    long long deathTime;     // B: the time of death, or 0.
+    long long hurtTime;      // A: the time that the health last went down.
 } FOPlayer;
 
 #define FO_MAX_DOORS 4
@@ -162,6 +163,16 @@ void fo_world_spawn(FOWorld *world, FOPlayer *player, int cls);
 
 // Moves the world by dt seconds, as GameWorld.update.
 void fo_world_update(FOWorld *world, float dt);
+
+// Player.k(float) (xn.java:899-910): sets the health. At 0 the player
+// dies.
+void fo_player_set_health(FOWorld *world, FOPlayer *player, float health);
+
+// Player.v() (xn.java:777-819): the death of the player.
+void fo_player_die(FOWorld *world, FOPlayer *player);
+
+// Player.E(): the player is dead and waits for the respawn.
+int fo_player_waiting(const FOPlayer *player);
 
 // The jump of the input (Player.t, xn.java:705-724). Returns 1 when the
 // player jumps.

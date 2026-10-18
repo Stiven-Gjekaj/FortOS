@@ -184,6 +184,44 @@ FO_TEST(testWorldDoorOpensForTheTeam) {
     fo_world_free(world);
 }
 
+FO_TEST(testWorldPitKillsAndPlayerComesBack) {
+    // A pit at x 30 to 35 m: a death area over a hole in the floor.
+    NSString *text = [mapText(nil) stringByReplacingOccurrencesOfString:@"</objectgroup>\n</map>"
+        withString:@"  <object id=\"9\" name=\"playerdeatharea\" x=\"300\" y=\"250\" width=\"50\" height=\"40\"/>\n"
+                   @" </objectgroup>\n</map>"];
+    FOWorld *world = fo_world_new(text.UTF8String, 7);
+    FOPlayer *p = standingPlayer(world, FO_TEAM_BLU, FO_CLASS_SCOUT, 25);
+    FO_EXPECT(p->alive);
+    p->move = FO_MOVE_RIGHT;
+    run(world, 120);
+    FO_EXPECT(!p->alive);
+    FO_EXPECT(fo_player_waiting(p));
+    FO_EQUAL_INT((int)p->health, 0);
+    long long death = p->deathTime;
+    // The respawn comes 9999 ms after the death, in the spawn room.
+    while (world->now - death < 9990) run(world, 1);
+    FO_EXPECT(!p->alive);
+    run(world, 2);
+    FO_EXPECT(p->alive);
+    FO_EQUAL_INT((int)p->health, 125);
+    float x, y;
+    fo_player_position(p, &x, &y);
+    FO_EXPECT(x < 8);
+    fo_world_free(world);
+}
+
+FO_TEST(testWorldHealthSetter) {
+    FOWorld *world = newWorld(nil);
+    FOPlayer *p = standingPlayer(world, FO_TEAM_BLU, FO_CLASS_HEAVY, 25);
+    fo_player_set_health(world, p, 120);
+    FO_EXPECT(p->hurtTime == world->now);
+    FO_EXPECT(p->alive);
+    fo_player_set_health(world, p, -10);
+    FO_EXPECT(!p->alive);
+    FO_EQUAL_INT((int)p->health, 0);
+    fo_world_free(world);
+}
+
 FO_TEST(testWorldRefusesBadMap) {
     FO_EXPECT(fo_world_new("not a map", 1) == NULL);
 }

@@ -283,6 +283,7 @@ void fo_world_spawn(FOWorld *world, FOPlayer *p, int cls) {
         x = x0 + (x1 - x0) * fo_world_random(world);
         y = fo_world_random(world) * (y1 - y0) + y0;
     }
+    fo_phys_body_set_active(p->obj.body, 1);
     fo_phys_body_set_transform(p->obj.body, x, y, 0);
     fo_phys_body_set_velocity(p->obj.body, 0, -5);
     fo_phys_body_set_awake(p->obj.body, 1);
@@ -290,6 +291,33 @@ void fo_world_spawn(FOWorld *world, FOPlayer *p, int cls) {
     p->health = fo_class_health(cls);
     p->alive = 1;
     p->deathTime = 0;
+}
+
+void fo_player_set_health(FOWorld *world, FOPlayer *p, float health) {
+    if (health < p->health) p->hurtTime = world->now;
+    if (health < 0) health = 0;
+    p->health = health;
+    if (health <= 0 && p->alive) fo_player_die(world, p);
+}
+
+void fo_player_die(FOWorld *world, FOPlayer *p) {
+    if (!p->alive) return;
+    p->deathTime = world->now;
+    p->alive = 0;
+    p->health = 0;
+    // The original moves the body to (-5, -5), out of the map. FortOS also
+    // turns the body off, so that it does not fall while the player waits.
+    fo_phys_body_set_transform(p->obj.body, -5, -5, 0);
+    fo_phys_body_set_velocity(p->obj.body, 0, 0);
+    fo_phys_body_set_active(p->obj.body, 0);
+    p->foot.count = p->foot.ground = 0;
+    p->left.count = p->left.ground = 0;
+    p->right.count = p->right.ground = 0;
+    p->move = FO_MOVE_STOP;
+}
+
+int fo_player_waiting(const FOPlayer *p) {
+    return !(p->health > 0 || p->deathTime == 0 || p->alive);
 }
 
 void fo_player_position(const FOPlayer *p, float *x, float *y) {
@@ -480,6 +508,33 @@ static void dispatch_begins(FOWorld *world) {
     world->begin_count = 0;
 }
 
+// BaseGameMap.a(float) (ack.java:79-99): a player in a death area dies.
+static void map_update(FOWorld *world) {
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        FOPlayer *p = &world->players[i];
+        if (!p->used || !p->alive) continue;
+        float x, y;
+        fo_player_position(p, &x, &y);
+        for (int a = 0; a < world->map.area_count; a++) {
+            if (world->map.areas[a].kind == FO_AREA_DEATH && fo_rect_contains(&world->map.areas[a].rect, x, y)) {
+                fo_player_set_health(world, p, 0);
+                break;
+            }
+        }
+    }
+}
+
+// GameServer.a(float) (ws.java:20-26): a dead player comes back 9999 ms
+// after the death.
+static void server_update(FOWorld *world) {
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        FOPlayer *p = &world->players[i];
+        if (p->used && fo_player_waiting(p) && world->now - p->deathTime >= 9999 && p->cls != 0) {
+            fo_world_spawn(world, p, p->cls);
+        }
+    }
+}
+
 void fo_world_update(FOWorld *world, float dt) {
     if (dt < 0) dt = 0;
     if (dt > 0.1f) dt = 0.1f;
@@ -497,5 +552,7 @@ void fo_world_update(FOWorld *world, float dt) {
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
         if (world->players[i].used) player_update(world, &world->players[i], dt);
     }
+    map_update(world);
     for (int i = 0; i < world->door_count; i++) door_update(world, &world->doors[i], dt);
+    server_update(world);
 }
