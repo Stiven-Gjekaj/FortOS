@@ -26,7 +26,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
   original.
 - Add the player body: run, jump, and the collision filters of the teams
   and the spawn rooms.
-- Add the death pits and the fall zones.
+- Add the death areas of the maps.
 - Add the camera: the follow, the view width, and the clamp to the map.
 - Add the two touch sticks of the original, with their default positions.
 - Test the walk, the jump, the doors, and the death areas with the values
