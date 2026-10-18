@@ -29,9 +29,11 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 ---
 
 > [!NOTE]
-> **Version 0.4.0 is out.** All 9 classes fight with their weapons and
-> abilities on the three maps of single player, at 60 frames each second
-> on the iPhone 4S. The game modes and the bots come in the next versions. [TODO.md](TODO.md) lists them.
+> **Version 0.5.0 is out.** All 9 classes fight with their weapons and
+> abilities in the three game modes of single player: King of the Hill,
+> the bomb, and capture the flag, at 60 frames each second on the iPhone
+> 4S. The bots come in the next version. [TODO.md](TODO.md) lists the
+> roadmap.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes of each release.
 
 > [!IMPORTANT]
@@ -67,6 +69,18 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 <p align="center"><i>flag_egypt</i></p>
 </td>
 <td width="50%" valign="top">
+<img src="assets/screenshots/bomb.png" alt="A red soldier beside the bomb gate on bomb_canyon. The bomb rolls to the right, and the round timer of 6:45 is at the top">
+<p align="center"><i>The bomb</i></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="assets/screenshots/flag.png" alt="A red soldier carries the blue flag in the pyramid of flag_egypt. The HUD at the top shows 0/4 captures for each team and an arrow to each flag">
+<p align="center"><i>Capture the flag</i></p>
+</td>
+<td width="50%" valign="top">
+<img src="assets/screenshots/roundover.png" alt="The round-over dialog: red team wins, the top 3 scores of each team, and your score">
+<p align="center"><i>The end of a round</i></p>
 </td>
 </tr>
 </table>
