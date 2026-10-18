@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "fo_look.h"
+
 static const FOAtlasTextures *gSprites;
 static const FOFont *gFont;
 static const FOFont *gFont6, *gFont12, *gFont21;
@@ -387,20 +389,174 @@ static FOColor faded(unsigned int hex, float alpha) {
     return fo_rgba(hex, alpha);
 }
 
+// The runners of the round-over dialog (RoundOverDialog.b and .a,
+// ajl.java:403-816): the winners run after the losers on the bottom bar
+// and shoot at the sky.
+#define FO_RUNNERS FO_MAX_PLAYERS
+#define FO_RUNNER_SHOTS 256
+
+typedef struct {
+    FORunner r;
+    FOLook look;
+    float x;          // F.x or E.x: the middle on the screen.
+    float K, N, O;    // The aim, and the two ends of its swing.
+    int rising;       // E: the aim goes up.
+    float lastShot;   // L
+    int shots;
+} FOHudRunner;
+
+typedef struct {
+    int cls;
+    float start;
+    float x, y;       // b: the muzzle on the screen.
+    float vx, vy;     // c: m/s.
+    float gravity;
+    int life;         // The flames go after their life.
+} FOHudShot;
+
+static FOHudRunner gRunners[FO_RUNNERS];
+static int gRunnerCount;
+static FOHudShot gShots[FO_RUNNER_SHOTS];
+static int gShotCount;
+
+static float hud_rand(float lo, float hi) {
+    return lo + (hi - lo) * (float)rand() / (float)RAND_MAX;
+}
+
+// RoundOverDialog.a(wt, int, xn) (ajl.java:274-288): the winners run to
+// the side of their own fridge when blu wins, else to the other side.
+static void runners_start(const FOWorld *world, int winner) {
+    gRunnerCount = 0;
+    gShotCount = 0;
+    const FORect *red = fo_tmx_area(&world->map, FO_AREA_FRIDGE_RED);
+    const FORect *blu = fo_tmx_area(&world->map, FO_AREA_FRIDGE_BLU);
+    int z2 = red && blu ? blu->x > red->x : 1;
+    int right = winner == FO_TEAM_BLU ? z2 : !z2;
+    float J = 19 * gH / 150, I = J * 0.90000004f / 1.9f;
+    for (int i = 0; i < FO_MAX_PLAYERS && gRunnerCount < FO_RUNNERS; i++) {
+        const FOPlayer *p = &world->players[i];
+        if (!p->used || p->cls == 0 || p->team == 0) continue;
+        FOHudRunner *n = &gRunners[gRunnerCount++];
+        memset(n, 0, sizeof(*n));
+        n->r.cls = p->cls;
+        n->r.team = p->team;
+        n->r.right = right;
+        n->r.shotAgo = 1000;
+        n->lastShot = -1000;
+        if (p->team == winner) {
+            if (right) {
+                n->N = hud_rand(11, 15);
+                n->O = hud_rand(7, 9);
+                n->x = -(hud_rand(I / 2 * 10, I / 2 * 30) + I / 2 * 30);
+            } else {
+                n->N = 360 - hud_rand(7, 9);
+                n->O = 360 - hud_rand(11, 15);
+                n->x = gW + hud_rand(I / 2 * 10, I / 2 * 30) + I / 2 * 30;
+            }
+        } else {
+            n->r.armsUp = 1;
+            n->r.vx = 2;
+            n->x = right ? -hud_rand(I / 2 * 5, I / 2 * 20) : gW + hud_rand(I / 2 * 5, I / 2 * 20);
+        }
+    }
+}
+
+// RoundOverDialog.b.b(float) (ajl.java:452-490) and .a.b(float).
+static void runner_move(FOHudRunner *n, float dt, float now) {
+    float step = gH * 4 / 150 * fo_class_speed(n->r.cls) * dt * (n->r.right ? 1 : -1);
+    n->look.stateTime += dt;
+    if (n->r.armsUp) {
+        n->x += step;
+        return;
+    }
+    const FOWeaponDef *def = fo_weapon_default(n->r.cls);
+    float interval = def ? def->interval / 1000.0f : 1;
+    float slow = n->shots > 0 && now - n->lastShot < interval && def ? def->afterShot : 1;
+    n->x += step * slow;
+    n->r.vx = n->r.cls == FO_CLASS_SNIPER ? 4 : slow * 1.8f;
+    if (n->r.cls == FO_CLASS_SNIPER) {
+        n->K = 0;
+    } else if (!n->rising) {
+        n->K -= 13 * dt;
+        if (n->K < n->O) {
+            n->K = n->O;
+            n->rising = 1;
+        }
+    } else {
+        n->K += 13 * dt;
+        if (n->K > n->N) {
+            n->K = n->N;
+            n->rising = 0;
+        }
+    }
+    n->r.aim = n->K + (n->r.right ? 0 : 180);
+    if (n->r.cls == FO_CLASS_SNIPER) n->r.aim = 0;
+    if (n->x > 0 && n->x < gW && def && now - n->lastShot >= interval && gShotCount < FO_RUNNER_SHOTS) {
+        n->lastShot = now;
+        n->shots++;
+        float a = n->K + (n->r.right ? 0 : 180);
+        float mx, my;
+        FORunner aim = n->r;
+        aim.aim = a;
+        fo_look_runner_muzzle(&aim, &mx, &my);
+        float v = gH / 150;
+        FOHudShot *s = &gShots[gShotCount++];
+        s->cls = n->r.cls;
+        s->start = now;
+        s->x = n->x + mx * 10 * v;
+        s->y = 19 * v / 2 + my * 10 * v;
+        s->vx = cosf(a * 0.017453292f) * def->speed;
+        s->vy = sinf(a * 0.017453292f) * def->speed;
+        s->gravity = -15 * def->gravity;
+        s->life = def->kind == FO_SHOT_FLAME ? def->life : 0;
+    }
+    n->r.shotAgo = now - n->lastShot;
+}
+
+// RoundOverDialog.b.a(float, SpriteBatch) (ajl.java:574-596): the shots
+// fly with the gravity, 10.3 UI units each meter.
+static void shots_draw(float now) {
+    float scale = 10.3f * gU, v = gH / 150;
+    int k = 0;
+    for (int i = 0; i < gShotCount; i++) {
+        FOHudShot *s = &gShots[i];
+        float t = now - s->start;
+        float x = s->x + s->vx * t * scale;
+        float y = s->y + (0.5f * s->gravity * t * t + s->vy * t) * scale;
+        if ((s->life && t >= s->life / 1000.0f) || x < -gW || x > 2 * gW || y < -gH) continue;
+        float angle = atan2f(s->vy + s->gravity * t, s->vx);
+        fo_look_runner_shot(s->cls, x, y, angle, t, v);
+        gShots[k++] = *s;
+    }
+    gShotCount = k;
+}
+
+static void runners_draw(const FOWorld *world, float dt, float now) {
+    shots_draw(now);
+    float v = gH / 150;
+    for (int pass = 0; pass < 2; pass++) {
+        for (int i = 0; i < gRunnerCount; i++) {
+            FOHudRunner *n = &gRunners[i];
+            if (n->r.armsUp != (pass == 0)) continue;
+            runner_move(n, dt, now);
+            fo_look_runner(world, &n->r, &n->look, n->x, 19 * v / 2, v, gW, gH);
+        }
+    }
+}
+
 // RoundOverDialog (ajl.java:58-300): the winner, the top 3 scores of each
-// team, and the score of the local player. The original also shows the
-// classes of the players, who run on the bottom bar. FortOS does not show
-// them yet.
+// team, the score of the local player, and the runners.
 int fo_hud_round_over(const FOWorld *world, const FOPlayer *local, float dt) {
     if (!fo_mode_over(world) || !local) {
         gRoundTime = 0;
         return 0;
     }
+    int winner = fo_mode_winner(world);
+    if (gRoundTime == 0) runners_start(world, winner);
     gRoundTime += dt;
     float al = gRoundTime / 0.3f;
     if (al > 1) al = 1;
     float u = gU, v = gH / 150.0f, W = gW, H = gH;
-    int winner = fo_mode_winner(world);
     // The bottom bar.
     float barH = H * 24 / 150;
     draw_box("roundover_bottombar", 0, 0, W, barH, al);
@@ -505,6 +661,7 @@ int fo_hud_round_over(const FOWorld *world, const FOPlayer *local, float dt) {
             fo_font_draw(gFont, text, x + 78 * u + 24 * u, ty, u, faded(0x8f846e, al), FO_ALIGN_CENTER);
         }
     }
+    runners_draw(world, dt, gRoundTime);
     return 1;
 }
 

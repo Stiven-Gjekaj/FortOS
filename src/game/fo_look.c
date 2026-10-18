@@ -19,6 +19,7 @@ typedef struct {
     FOSprite arm;
     FOSprite death[7];
     FOSprite bodytop;
+    FOSprite armsUp;
 } FOClassLook;
 
 // The numbers of each class in art pixels (player-render.md, 2.3).
@@ -114,6 +115,7 @@ void fo_look_init(const FOAtlasTextures *sprites) {
                 l->death[i] = find(team, c, part);
             }
             l->bodytop = find(team, c, "bodytop");
+            l->armsUp = find(team, c, "armsoverhead");
         }
     }
     for (int i = 0; i < 7; i++) {
@@ -273,7 +275,12 @@ static void draw_main(const FOWorld *world, const FOPlayer *p, FOLook *look, flo
     const FOArm *arm = fo_class_arm(cls);
     long long nowMs = world->now;
     float vx, vy;
-    fo_player_velocity(p, &vx, &vy);
+    if (look->ownSpeed) {
+        vx = look->vx;
+        vy = 0;
+    } else {
+        fo_player_velocity(p, &vx, &vy);
+    }
     float Y0 = Y - p->obj.h / 2;
     int s = p->facingRight ? 1 : -1;
     int grounded = fo_player_grounded(p);
@@ -792,4 +799,91 @@ void fo_look_preview(const FOWorld *world, int cls, short team, float cx, float 
     fo_gfx_view(-cx / m, -cy / m, (width - cx) / m, (height - cy) / m);
     draw_main(world, &p, &look, time, 0, 0, cls, team, &p.weapon, FO_WHITE, -1);
     fo_gfx_view(0, 0, width, height);
+}
+
+// A fake player with the default weapon of the runner, for draw_main.
+static void runner_player(const FOWorld *world, const FORunner *r, FOPlayer *p) {
+    memset(p, 0, sizeof(*p));
+    p->cls = r->cls;
+    p->team = r->team;
+    p->alive = 1;
+    p->facingRight = r->right;
+    p->obj.w = 0.90000004f;
+    p->obj.h = 1.9f;
+    p->foot.count = 1;
+    p->foot.ground = 1;
+    p->landTime = -100000;
+    p->weapon.def = fo_weapon_default(r->cls);
+    // fo_player_set_aim keeps the angle in (-180, 180].
+    float a = fmodf(r->aim, 360.0f);
+    if (a > 180) a -= 360;
+    if (a <= -180) a += 360;
+    p->weapon.angle = a;
+    p->weapon.lastShot = world->now - (long long)(r->shotAgo * 1000.0f);
+}
+
+void fo_look_runner(const FOWorld *world, const FORunner *r, FOLook *look, float cx, float cy, float unit, float width,
+                    float height) {
+    if (r->cls < 1 || r->cls > 9 || (r->team != 1 && r->team != 2) || unit <= 0) return;
+    float m = 10.0f * unit;
+    fo_gfx_view(-cx / m, -cy / m, (width - cx) / m, (height - cy) / m);
+    look->ownSpeed = 1;
+    look->vx = r->right ? r->vx : -r->vx;
+    if (!r->armsUp) {
+        FOPlayer p;
+        runner_player(world, r, &p);
+        draw_main(world, &p, look, look->stateTime, 0, 0, r->cls, r->team, &p.weapon, FO_WHITE, -1);
+    } else {
+        // RoundOverDialog.a.a(SpriteBatch) (ajl.java:732-747): the run frames
+        // of the legs, and the arms over the head on top of them.
+        const FOClassLook *l = &gLooks[r->cls][r->team];
+        float dur = fabsf(fo_class_speed(r->cls) * 0.01f - 0.1f) + 0.1f;
+        int idx = (int)floorf(look->stateTime / dur) % 6;
+        look->S = idx;
+        int bob;
+        if (r->cls != FO_CLASS_SPY && r->cls != FO_CLASS_PYRO) bob = idx == 0 || idx == 3;
+        else bob = (idx == 0 || idx == 2 || idx == 3 || idx == 5) ? -1 : 0;
+        int s = r->right ? 1 : -1;
+        const FOSprite *legs = &l->run[idx];
+        float Y0 = -0.95f + bob * Z;
+        float lh = legs->h * Z;
+        if (legs->w) draw_centered(legs, 0, Y0 + lh / 2, s, 0, FO_WHITE);
+        // RoundOverDialog.a.a(boolean): the arms go forward for some classes.
+        float off = 0;
+        if (r->cls == FO_CLASS_SCOUT || r->cls == FO_CLASS_SPY) off = 0.1f;
+        else if (r->cls == FO_CLASS_SOLDIER || r->cls == FO_CLASS_PYRO || r->cls == FO_CLASS_DEMOMAN) off = 0.05f;
+        const FOSprite *up = &l->armsUp;
+        if (up->w) draw_centered(up, s * off, Y0 + lh + up->h * Z / 2, s, 0, FO_WHITE);
+    }
+    look->ownSpeed = 0;
+    fo_gfx_view(0, 0, width, height);
+}
+
+void fo_look_runner_muzzle(const FORunner *r, float *x, float *y) {
+    *x = 0;
+    *y = 0;
+    const FOWeaponDef *def = fo_weapon_default(r->cls);
+    if (r->cls < 1 || r->cls > 9 || !def) return;
+    const FOArm *arm = fo_class_arm(r->cls);
+    const FOClassLook *l = &gLooks[r->cls][r->team == 2 ? 2 : 1];
+    float fw = l->body[0].w * Z;
+    int s = r->right ? 1 : -1;
+    float ax = s > 0 ? (arm->jx + arm->h) : (fw - arm->jx - arm->h);
+    float px = -fw / 2 + ax, py = -0.95f + arm->jy + arm->ky;
+    float phi = r->aim * 0.017453292f;
+    float ox = def->ix, oy = s * def->iy;
+    *x = px + (ox * cosf(phi) - oy * sinf(phi));
+    *y = py + (oy * cosf(phi) + ox * sinf(phi));
+}
+
+void fo_look_runner_shot(int cls, float x, float y, float angle, float age, float unit) {
+    const FOWeaponDef *def = fo_weapon_default(cls);
+    if (!def || def->item >= 64) return;
+    int frames = gBulletFrames[def->item];
+    if (!frames) return;
+    int frame = frames > 1 ? (int)floorf(age / 0.14285715f) % frames : 0;
+    const FOSprite *s = &gBullets[def->item][frame];
+    if (!s->w) return;
+    float w = s->w * unit, h = s->h * unit;
+    fo_gfx_draw(s, x, y, w, h, w / 2, h / 2, angle, 0, FO_WHITE);
 }
