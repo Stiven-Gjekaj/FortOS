@@ -76,7 +76,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Add the single player screen: the map, and 8, 10, or 12 players.
 - Add the team dialog, the class dialog, and the menu dialog of a match.
 
-## 0.7: the feel
+## 0.7: the feel (done, 2026-10-18)
 
 - Play the sounds and the music of the original, decoded on the phone.
 - Add the position, the fall off, and the pan of the sounds.
