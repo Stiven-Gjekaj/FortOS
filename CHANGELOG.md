@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 (2026-10-18)
+
+- A launch image in the colour of the splash, so the start shows no
+  black screen.
+- The speed log of the debug build shows the resident memory.
+- Measured on the iPhone 4S with 12 players: 60 frames each second on
+  each map, 35 to 55 MB in a match, and 26 MB in the menus. The numbers
+  are in docs/decisions.md.
+
 ## 0.8.0 (2026-10-18)
 
 - The splash, the main menu, and the credits of GANGFORT.
