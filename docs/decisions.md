@@ -65,6 +65,18 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
 - **The tests do not read the assets.** A test builds the state that it
   needs.
 
+- **The tests hold the numbers of the original code. There is no oracle
+  that runs the Java code** (0.2, 2026-10-18). The roadmap had an oracle as
+  in Balatro4S. It needs a dex to jar tool, the desktop natives of libGDX
+  1.9.3, and an x86_64 Java under Rosetta, because those natives have no
+  arm64 build. Reason: the physics is the same Box2D 2.3.1, and each rule
+  is a short formula in one place of the Java code. A test with the values
+  of that place finds a fault for less work.
+- **The world clock replaces the wall clock.** The original reads
+  System.currentTimeMillis in the rules, for example for the 100 ms lock of
+  a jump. FortOS reads a clock that moves with each frame. Reason: the
+  tests can then run a world for a given time with no wait.
+
 ## Identity
 
 - Bundle ID `io.github.stivengjekaj.fortos`, display name `FortOS`.
