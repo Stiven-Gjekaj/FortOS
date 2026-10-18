@@ -210,6 +210,16 @@ players. The speed log of the debug build gives them each second.
 - The pan of a sound compares its angle with the angle of a zero vector.
   So a sound above or under the ear is on the left, and a sound at the
   side of the ear is in the middle (ala.java).
+- A death with no damage in the last 120 s, or a death by the own weapon,
+  gives the victim the 2 points of the kill, because KillEventData names
+  the victim as the killer (KillEventData.java:69-72, xn.java:788).
+- A sentry does not shoot while the arm of its builder is at a wall. The
+  weapon of the sentry takes its muzzle from the arm of the builder, 1 m to
+  the right at the angle 0 (alt.java:51-53, alz.java:141-151, 328-344).
+- The rule that stops a projectile near an enemy that died less than 100 ms
+  ago never acts. It compares the time with Player.Y(), which already is a
+  time since the death (alz.java:280-291, xn.java:1446). FortOS does not
+  have the rule.
 - Only the bots named gintrux69, morlicando, "bot gintas", and "bot lukas"
   wear a hat (zm.java:40-47).
 - An item title and its description are in lower case
