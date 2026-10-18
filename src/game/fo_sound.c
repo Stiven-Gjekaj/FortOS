@@ -110,6 +110,8 @@ typedef struct {
 
 static FOSlot gSlots[FO_SLOTS];
 static float gListenerX, gListenerY, gRange = 1;
+// ala.a: the volume of all the sounds, and its fade (ala.java:162-169).
+static float gMaster = 1, gFadeFrom = 1, gFadeTo = 1, gFadeStart, gFadeTime, gNow;
 
 // The volume and the pan of a slot (ala.a.a(Vector2, float)). The pan
 // compares the angle of the sound with the angle of a zero vector, and the
@@ -126,7 +128,7 @@ static void slot_mix(const FOSlot *s, float *volume, float *pan) {
         *pan = 0.0f + (-1.0f - 0.0f) * (a / 1.5707964f);
     }
     float v = 1.0f - len / gRange;
-    *volume = v < 0 ? 0 : v > 1 ? 1 : v;
+    *volume = (v < 0 ? 0 : v > 1 ? 1 : v) * gMaster;
 }
 
 static void slot_stop(FOSlot *s) {
@@ -205,6 +207,13 @@ void fo_sound_update(const FOWorld *world, int localId, float listenerX, float l
     if (!gMixer) return;
     gListenerX = listenerX;
     gListenerY = listenerY;
+    gNow = now;
+    if (gFadeTime <= 0) {
+        gMaster = gFadeTo;
+    } else {
+        float t = (now - gFadeStart) / gFadeTime;
+        gMaster = (t <= 1.0f ? t : 1.0f) * (gFadeTo - gFadeFrom) + gFadeFrom;
+    }
     gRange = range > 0 ? range : 1;
     for (int i = 0; i < world->event_count; i++) {
         const FOEvent *e = &world->events[i];
@@ -251,4 +260,11 @@ void fo_sound_stop_all(void) {
     memset(gHeal, 0, sizeof(gHeal));
     memset(gFlame, 0, sizeof(gFlame));
     memset(gHealTarget, 0, sizeof(gHealTarget));
+}
+
+void fo_sound_fade(float volume, float seconds) {
+    gFadeFrom = gMaster;
+    gFadeTo = volume;
+    gFadeStart = gNow;
+    gFadeTime = seconds;
 }

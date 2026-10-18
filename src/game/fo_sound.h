@@ -27,6 +27,10 @@ void fo_sound_music(float volume);
 // (wt.java:79-89). now is the clock of the app in seconds.
 void fo_sound_update(const FOWorld *world, int localId, float listenerX, float listenerY, float range, float now);
 
+// Fades the volume of all the sounds of the world to volume in the time,
+// as the kill cam does (ala.a(float, long), aeb.java:747, 767).
+void fo_sound_fade(float volume, float seconds);
+
 // Stops all the sounds of the world, as at the end of a match.
 void fo_sound_stop_all(void);
 
