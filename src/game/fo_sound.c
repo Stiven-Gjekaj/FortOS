@@ -49,13 +49,18 @@ static double seconds(void) {
 static void *decode_all(void *unused) {
     (void)unused;
     double start = seconds();
-    for (int i = 0; i < FO_SOUND_COUNT; i++) {
-        if (!gFiles[i].bytes) continue;
-        if (!fo_mixer_add_vorbis(gMixer, kSounds[i], gFiles[i].bytes, gFiles[i].size, 0, sound_volume(kSounds[i]))) {
-            fprintf(stderr, "sound: %s does not decode\n", kSounds[i]);
-            free(gFiles[i].bytes);
+    // The sounds of the splash and of the menus decode first, so that the
+    // splash can play its sound at the start.
+    for (int pass = 0; pass < 2; pass++) {
+        for (int i = 0; i < FO_SOUND_COUNT; i++) {
+            int first = strcmp(kSounds[i], "splash_hit") == 0 || strcmp(kSounds[i], "menu_click1") == 0;
+            if (!gFiles[i].bytes || first != (pass == 0)) continue;
+            if (!fo_mixer_add_vorbis(gMixer, kSounds[i], gFiles[i].bytes, gFiles[i].size, 0, sound_volume(kSounds[i]))) {
+                fprintf(stderr, "sound: %s does not decode\n", kSounds[i]);
+                free(gFiles[i].bytes);
+            }
+            gFiles[i].bytes = NULL;
         }
-        gFiles[i].bytes = NULL;
     }
     fprintf(stderr, "sound: all sounds are ready in %.2f s\n", seconds() - start);
     return NULL;
@@ -83,6 +88,10 @@ static int is_global(const char *name) {
            strcmp(name, "flag_stolen") == 0 || strcmp(name, "cartpush_explosion") == 0 ||
            strcmp(name, "game_over_victory") == 0 || strcmp(name, "game_over_lost") == 0 ||
            strcmp(name, "killzoom") == 0 || strcmp(name, "menu_click1") == 0 || strcmp(name, "item_gained") == 0;
+}
+
+int fo_sound_ready(const char *name) {
+    return gMixer && fo_mixer_has(gMixer, name);
 }
 
 void fo_sound_global(const char *name) {

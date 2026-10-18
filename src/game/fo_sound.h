@@ -14,6 +14,9 @@
 // is ready.
 void fo_sound_init(FOMixer *mixer);
 
+// The sound is decoded and can play.
+int fo_sound_ready(const char *name);
+
 // Plays a sound with no place, as GameSound.b() (acw.java).
 void fo_sound_global(const char *name);
 
