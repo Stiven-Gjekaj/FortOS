@@ -13,6 +13,7 @@
 #include "fo_gfx.h"
 #include "fo_bots.h"
 #include "fo_hud.h"
+#include "fo_screens.h"
 #include "fo_look.h"
 #include "fo_maps.h"
 #include "fo_world.h"
@@ -27,12 +28,16 @@ static struct {
     int width, height;
     float time;
     FOAtlasTextures sprites;
+    FOAtlasTextures ui;       // res/textures/ui.atlas: the menus.
     FOFont pixel4, pixel6, pixel12, pixel21;
     FOText *texts;
     FOMap map;
     int mapLoaded;
     FOBots bots;
     int maxPlayers;           // The players of a match with the human: 8, 10, or 12.
+    int screen;               // FO_VIEW_SINGLE or FO_VIEW_MATCH.
+    int dialog;               // The dialog over the match, or FO_DIALOG_NONE.
+    int botsJoined;           // h of xa.java: the bots joined the match.
     FOLook looks[FO_MAX_PLAYERS];
     FOCamera camera;
     FOControls controls;
@@ -54,6 +59,9 @@ static struct {
     int debugScore;
 } G;
 
+enum { FO_VIEW_SINGLE = 0, FO_VIEW_MATCH };
+enum { FO_DIALOG_NONE = 0, FO_DIALOG_TEAM, FO_DIALOG_CLASS, FO_DIALOG_MENU };
+
 static void fail(const char *message) {
     snprintf(G.error, sizeof(G.error), "%s", message);
     fprintf(stderr, "fo_game: %s\n", message);
@@ -73,29 +81,50 @@ static FOPlayer *local_player(void) {
     return G.mapLoaded ? fo_world_player(G.map.world, FO_LOCAL_ID) : NULL;
 }
 
-// Loads the map and spawns the local player in it.
-static int start_map(FOMapId id) {
+// Loads the map. The local player joins with no team and no class, and
+// the team dialog opens (xa.java:28-52, aeb.java:98). With play, the local
+// player takes the team and the class of the debug commands at once.
+static int start_map(FOMapId id, int play) {
     if (G.mapLoaded) fo_map_free(&G.map);
     G.mapLoaded = 0;
     double start = wall_seconds();
     if (!fo_map_load(&G.map, id, (unsigned int)(start * 1000))) return 0;
     G.mapLoaded = 1;
+    G.screen = FO_VIEW_MATCH;
     G.map.world->localId = FO_LOCAL_ID;
-    FOPlayer *p = fo_world_add_player(G.map.world, FO_LOCAL_ID, G.localTeam);
+    FOPlayer *p = fo_world_add_player(G.map.world, FO_LOCAL_ID, FO_TEAM_NONE);
     // SingleplayerClient (xa.java:35): the local player is "you".
     if (G.texts) snprintf(p->name, sizeof(p->name), "%s", fo_text_get(G.texts, "you"));
-    fo_world_spawn(G.map.world, p, G.localClass);
-    // SingleplayerGameController.i() (xa.java:138-206): the bots join after
-    // the first choice of a class.
     fo_bots_init(&G.bots, G.map.world, G.maxPlayers, FO_LOCAL_ID);
-    fo_bots_fill(&G.bots, G.map.world);
+    G.botsJoined = 0;
+    memset(G.looks, 0, sizeof(G.looks));
+    // GameCamera (wp.java:20-22): the camera starts on the objective.
     float x, y;
-    fo_player_position(p, &x, &y);
+    fo_mode_objective(G.map.world, &x, &y);
     fo_camera_init(&G.camera, G.width, G.height, x, y);
     fo_hud_map(fo_map_name(id));
+    G.dialog = FO_DIALOG_TEAM;
+    if (play) {
+        fo_world_change_team(G.map.world, p, G.localTeam);
+        fo_world_change_class(G.map.world, p, G.localClass);
+        fo_bots_fill(&G.bots, G.map.world);
+        G.botsJoined = 1;
+        G.dialog = FO_DIALOG_NONE;
+        fo_player_position(p, &x, &y);
+        fo_camera_init(&G.camera, G.width, G.height, x, y);
+    }
     fprintf(stderr, "map %s: %.3f s, textures %.1f MB\n", fo_map_name(id), wall_seconds() - start,
             fo_assets_texture_bytes() / 1048576.0);
     return 1;
+}
+
+// SingleplayerScreen (agv.java): the first screen.
+static void open_single(void) {
+    if (G.mapLoaded) fo_map_free(&G.map);
+    G.mapLoaded = 0;
+    G.screen = FO_VIEW_SINGLE;
+    G.dialog = FO_DIALOG_NONE;
+    fo_single_open();
 }
 
 int fo_game_start(const char *apk_path, int width, int height) {
@@ -123,7 +152,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
     if (!fo_assets_atlas(&G.sprites, "textures/sprites.atlas") || !fo_font_load(&G.pixel4, "fonts/pixel4.fnt") ||
         !fo_font_load(&G.pixel6, "fonts/pixel6.fnt") ||
         !fo_font_load(&G.pixel12, "fonts/pixel12.fnt") || !fo_font_load(&G.pixel21, "fonts/pixel21.fnt") ||
-        !start_map(FO_MAP_GANTOWN)) {
+        !fo_assets_atlas(&G.ui, "textures/ui.atlas")) {
         fail("The APK does not hold the files of GANGFORT 2.1.");
         return 0;
     }
@@ -132,6 +161,9 @@ int fo_game_start(const char *apk_path, int width, int height) {
     G.scopeMask = fo_assets_texture("textures/sniper_aim_alpha_mask.png");
     FOHudFonts fonts = {&G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21};
     fo_hud_init(&G.sprites, &fonts, G.texts, width, height);
+    FOScreensSetup screens = {&G.sprites, &G.ui, &G.pixel4, &G.pixel6, &G.pixel12, &G.pixel21, G.texts, width, height};
+    fo_screens_init(&screens);
+    open_single();
     fprintf(stderr, "start: %.3f s\n", wall_seconds() - start);
     return 1;
 }
@@ -313,7 +345,7 @@ static void draw_hud(void) {
     update_buttons(p, G.icons);
     // GameScreen.e() (aeb.java:636-660): the controls hide while the local
     // player is dead, at the end of a round, and while the bomb is down.
-    if (p && p->alive && !fo_mode_over(G.map.world) && !fo_mode_bomb_down(G.map.world)) {
+    if (G.dialog == FO_DIALOG_NONE && p && p->alive && !fo_mode_over(G.map.world) && !fo_mode_bomb_down(G.map.world)) {
         fo_controls_draw(&G.controls, &G.sprites, p ? p->team : FO_TEAM_BLU, p && p->cls == FO_CLASS_SNIPER, G.icons);
     }
     fo_hud_round_over(G.map.world, p, G.frameDt);
@@ -337,8 +369,18 @@ void fo_game_frame(double dt) {
         G.fpsTime = 0;
     }
     double t0 = wall_seconds();
+    if (G.screen == FO_VIEW_SINGLE) {
+        fo_single_draw((float)dt);
+        fo_gfx_flush();
+        return;
+    }
     FOPlayer *p = local_player();
-    apply_input(p);
+    if (G.dialog == FO_DIALOG_NONE) {
+        apply_input(p);
+        if (fo_controls_take(&G.controls, FO_BUTTON_MENU)) G.dialog = FO_DIALOG_MENU;
+    } else if (p) {
+        p->move = FO_MOVE_STOP;
+    }
     fo_bots_update(&G.bots, G.map.world, (float)dt);
     fo_world_update(G.map.world, (float)dt);
     for (int i = 0; i < FO_MAX_PLAYERS; i++) G.looks[i].stateTime += (float)dt;
@@ -381,22 +423,76 @@ void fo_game_frame(double dt) {
     draw_world();
     draw_hud();
     if (!G.noVignette) fo_gfx_vignette();
+    fo_gfx_view(0, 0, (float)G.width, (float)G.height);
+    if (G.dialog == FO_DIALOG_TEAM) fo_team_draw(G.map.world);
+    else if (G.dialog == FO_DIALOG_CLASS) fo_class_draw(G.map.world, (float)dt);
+    else if (G.dialog == FO_DIALOG_MENU) fo_menu_draw();
     fo_gfx_flush();
     G.updateTime += t1 - t0;
     G.drawTime += wall_seconds() - t1;
 }
 
-void fo_game_touch(int id, int phase, float x, float y) {
-    if (!fo_controls_touch(&G.controls, id, phase, x, G.height - y) && phase == FO_TOUCH_BEGAN) {
-        tap_world(x, G.height - y);
+// The answer to a tap on a screen or a dialog.
+static void screen_action(FOScreenResult r) {
+    FOPlayer *p = local_player();
+    switch (r.action) {
+    case FO_SCREEN_PLAY:
+        // SingleplayerScreen.ahc (ahc.java:22-28).
+        G.maxPlayers = r.players;
+        start_map(r.map == 0 ? FO_MAP_FLAG_EGYPT : r.map == 1 ? FO_MAP_BOMB_CANYON : FO_MAP_GANTOWN, 0);
+        break;
+    case FO_SCREEN_TEAM:
+        // The team callback opens the class dialog (aeg.java, aec.java).
+        if (p) fo_world_change_team(G.map.world, p, (short)r.team);
+        G.dialog = FO_DIALOG_CLASS;
+        fo_class_open(p ? p->cls : 0, p ? p->team : FO_TEAM_BLU);
+        break;
+    case FO_SCREEN_CLASS:
+        // GameScreen.aeh and SingleplayerGameController.a(short)
+        // (xa.java:105-115): the bots join after the first class.
+        if (p) fo_world_change_class(G.map.world, p, r.cls);
+        if (!G.botsJoined) {
+            fo_bots_fill(&G.bots, G.map.world);
+            G.botsJoined = 1;
+        }
+        G.dialog = FO_DIALOG_NONE;
+        break;
+    case FO_SCREEN_RESUME: G.dialog = FO_DIALOG_NONE; break;
+    case FO_SCREEN_CHANGE_CLASS:
+        G.dialog = FO_DIALOG_CLASS;
+        fo_class_open(p ? p->cls : 0, p ? p->team : FO_TEAM_BLU);
+        break;
+    case FO_SCREEN_SWITCH_TEAM: G.dialog = FO_DIALOG_TEAM; break;
+    case FO_SCREEN_QUIT:
+        // The original goes to the main menu. FortOS has no main menu
+        // before 0.8, so it goes to the single player screen.
+        open_single();
+        break;
+    default: break;
     }
+}
+
+void fo_game_touch(int id, int phase, float x, float y) {
+    float sy = G.height - y;
+    if (G.screen == FO_VIEW_SINGLE) {
+        if (phase == FO_TOUCH_BEGAN) screen_action(fo_single_tap(x, sy));
+        return;
+    }
+    if (G.dialog != FO_DIALOG_NONE) {
+        if (phase != FO_TOUCH_BEGAN) return;
+        if (G.dialog == FO_DIALOG_TEAM) screen_action(fo_team_tap(x, sy));
+        else if (G.dialog == FO_DIALOG_CLASS) screen_action(fo_class_tap(x, sy));
+        else if (G.dialog == FO_DIALOG_MENU) screen_action(fo_menu_tap(x, sy));
+        return;
+    }
+    if (!fo_controls_touch(&G.controls, id, phase, x, sy) && phase == FO_TOUCH_BEGAN) tap_world(x, sy);
 }
 
 void fo_game_debug(const char *command) {
     int n;
     char name[32];
     if (sscanf(command, "vignette %d", &n) == 1) G.noVignette = !n;
-    if (sscanf(command, "map %d", &n) == 1 && n >= 0 && n < FO_MAP_COUNT) start_map((FOMapId)n);
+    if (sscanf(command, "map %d", &n) == 1 && n >= 0 && n < FO_MAP_COUNT) start_map((FOMapId)n, 1);
     if (sscanf(command, "class %d", &n) == 1 && n >= 1 && n <= 9) {
         G.localClass = n;
         FOPlayer *p = local_player();
@@ -404,12 +500,15 @@ void fo_game_debug(const char *command) {
     }
     if (sscanf(command, "players %d", &n) == 1 && n >= 1 && n <= FO_MAX_PLAYERS) {
         G.maxPlayers = n;
-        start_map(G.map.id);
+        start_map(G.mapLoaded ? G.map.id : FO_MAP_GANTOWN, 1);
     }
     if (sscanf(command, "team %31s", name) == 1) {
         G.localTeam = strcmp(name, "red") == 0 ? FO_TEAM_RED : FO_TEAM_BLU;
-        start_map(G.map.id);
+        start_map(G.mapLoaded ? G.map.id : FO_MAP_GANTOWN, 1);
     }
+    if (strncmp(command, "single", 6) == 0) open_single();
+    // The commands below need a match.
+    if (!G.mapLoaded) return;
     FOPlayer *p = local_player();
     if (sscanf(command, "move %d", &n) == 1) G.debugMove = n == FO_MOVE_STOP ? 0 : n;
     if (p && strncmp(command, "ability", 7) == 0) fo_player_ability(G.map.world, p);
