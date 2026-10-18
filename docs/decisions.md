@@ -100,9 +100,10 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   flag each frame, but gravity still adds to its speed. A drop then
   carries that speed into the ground. FortOS sets the speed to 0 while a
   player carries the flag.
-- **The round-over dialog does not show the classes yet.** The original
-  shows the class of each player, and these run on the bottom bar. The
-  rest of the dialog is as in the original.
+- **The runners of the round-over dialog turn the arm on the GPU.** The
+  original draws the arm of each winner into a framebuffer of 64 x 64
+  pixels. FortOS draws them with the code of the match, for the same
+  reason as the arm of a player.
 - **The place of the hill sign comes from the map.** The property
   `koth_cp_indicator_pos` of `gantown.tmx` is (582, 205.5). The original
   scales it by 0.1 and does not turn the y axis, so the sign is at
@@ -128,6 +129,18 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   button until then.
 - **The characters of the class dialog have no hats.** The hats come with
   the items in 0.8.
+
+- **The phone decodes the sounds of the APK.** FortOS uses stb_vorbis to
+  read the OGG files, and mixes them in software into one RemoteIO output
+  at 44100 Hz. The music streams at once. The other sounds decode on a
+  second thread in about 2 s at the start, and a sound that is not ready
+  does not play. Reason: the app keeps no copy of the assets.
+- **The big blast of the bomb loads only on the bomb map.** The original
+  loads `explosion.atlas` at the start. FortOS loads it when the bomb map
+  starts and frees it on the other maps. Reason: memory of the 4S.
+- **The kill cam copies the frame with glCopyTexSubImage2D.** The
+  original draws the frame into a framebuffer. Reason: the copy is one
+  call at the death, and each other frame has no extra pass.
 
 ## The quirks of the original that stay
 
@@ -156,6 +169,12 @@ Each entry gives the reason. The owner made these choices on 2026-10-18.
   more than one long link (zu.java:57).
 - The medic bot follows the idle human player too, and near the objective
   it leaves its patient for the objective (zs.java:73-123).
+- The pan of a sound compares its angle with the angle of a zero vector.
+  So a sound above or under the ear is on the left, and a sound at the
+  side of the ear is in the middle (ala.java).
+- On the round-over dialog, the winners run to the side of their own
+  fridge when BLU wins, and to the other side when RED wins
+  (ajl.java:274-279).
 
 ## Identity
 
