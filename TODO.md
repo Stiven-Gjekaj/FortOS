@@ -86,7 +86,7 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Add the flies and the birds of the maps.
 - Add the classes that run on the bottom bar of the round-over dialog.
 
-## 0.8: the menus and the items
+## 0.8: the menus and the items (done, 2026-10-18)
 
 - Add the splash, the main menu, and the credits.
 - Add the settings and the control setup screen.
