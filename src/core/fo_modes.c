@@ -143,6 +143,10 @@ static int koth_holds(const FOWorld *world, const FOPlayer *p) {
     int red, blu;
     koth_count(world, 1, &red, &blu);
     if (!player_in_area(world, p, FO_AREA_KOTH)) return 0;
+    // The test counts each body on the point (acq.java:140-152). The body of
+    // the victim is still there at the kill, so it counts for its team.
+    if (!p->alive && p->team == FO_TEAM_RED) red++;
+    if (!p->alive && p->team == FO_TEAM_BLU) blu++;
     if (p->team == FO_TEAM_RED && world->mode.owner == FO_TEAM_BLU && red > blu) return 1;
     return p->team == FO_TEAM_BLU && world->mode.owner == FO_TEAM_RED && blu > red;
 }

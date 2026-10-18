@@ -140,6 +140,25 @@ FO_TEST(testKothAttackerOnTheOwnedPointHoldsTheObjective) {
     fo_world_free(world);
 }
 
+FO_TEST(testKothKillOfAHolderCountsTheBodyOfTheVictim) {
+    // acq.java:140-160 counts the body of the victim, which is still on the
+    // point at the kill: 2 RED against 1 BLU, so the victim held the point.
+    FOWorld *world = newWorld(nil, kothArea);
+    fo_world_koth(world);
+    world->mode.owner = FO_TEAM_BLU;
+    world->mode.lastOwner = FO_TEAM_BLU;
+    world->mode.progress = -100;
+    FOPlayer *victim = playerAt(world, 1, FO_TEAM_RED, FO_CLASS_SCOUT, 43);
+    playerAt(world, 2, FO_TEAM_RED, FO_CLASS_SCOUT, 44);
+    playerAt(world, 3, FO_TEAM_BLU, FO_CLASS_SCOUT, 44.5f);
+    FOPlayer *killer = playerAt(world, 4, FO_TEAM_BLU, FO_CLASS_SOLDIER, 20);
+    run(world, 0.1f);
+    fo_player_damage(world, victim, killer->id, FO_ITEM_ROCKET_LAUNCHER, 500);
+    FO_EXPECT(!victim->alive);
+    FO_EQUAL_INT(killer->score, 3);
+    fo_world_free(world);
+}
+
 FO_TEST(testPlayersStopAtTheEndOfARound) {
     FOWorld *world = newWorld(nil, kothArea);
     fo_world_koth(world);
