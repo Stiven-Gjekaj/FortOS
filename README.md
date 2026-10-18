@@ -29,10 +29,10 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 ---
 
 > [!NOTE]
-> **Version 0.7.0 is out.** Play single player against the bots of
-> GANGFORT on the three maps, with the sounds, the music, the effects, and
-> the kill cam of the original, at 60 frames each second on the iPhone 4S.
-> The menus and the items come in the next version. [TODO.md](TODO.md) lists the
+> **Version 0.8.0 is out.** Play single player against the bots of
+> GANGFORT on the three maps, with the menus, the settings, the control
+> setup, and the 34 hats and 5 store weapons of the original, at 60 frames
+> each second on the iPhone 4S. The next version is for speed and polish. [TODO.md](TODO.md) lists the
 > roadmap.
 > [CHANGELOG.md](CHANGELOG.md) lists the changes of each release.
 
@@ -101,6 +101,16 @@ _Native C and OpenGL ES 2.0, offline matches against bots, your own copy of the 
 <td width="50%" valign="top">
 <img src="assets/screenshots/killcam.png" alt="The kill cam: the frame stops on a fight on gts_gantown, with bodies, shots, and the respawn text">
 <p align="center"><i>The kill cam</i></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="assets/screenshots/mainmenu.png" alt="The main menu: single player, items, and credits, the yash with his grenade launcher, and the settings button">
+<p align="center"><i>The main menu</i></p>
+</td>
+<td width="50%" valign="top">
+<img src="assets/screenshots/items.png" alt="The item screen of the marine: a list of hats, the santa hat on the marine, and its title and description">
+<p align="center"><i>The items of a class</i></p>
 </td>
 </tr>
 </table>
