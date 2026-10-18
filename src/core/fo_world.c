@@ -390,10 +390,19 @@ int fo_player_waiting(const FOPlayer *p) {
 }
 
 void fo_player_position(const FOPlayer *p, float *x, float *y) {
+    // A player with no body, as the character of a menu, is at (0, 0).
+    if (!p->obj.body) {
+        *x = *y = 0;
+        return;
+    }
     fo_phys_body_position(p->obj.body, x, y);
 }
 
 void fo_player_velocity(const FOPlayer *p, float *vx, float *vy) {
+    if (!p->obj.body) {
+        *vx = *vy = 0;
+        return;
+    }
     fo_phys_body_velocity(p->obj.body, vx, vy);
 }
 

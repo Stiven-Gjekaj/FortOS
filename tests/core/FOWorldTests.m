@@ -4,6 +4,7 @@
 #import "FOTest.h"
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 #include "fo_world.h"
 
 // A map of 100 x 30 m with a floor at y 2 m. The BLU room is at the left
@@ -224,4 +225,14 @@ FO_TEST(testWorldHealthSetter) {
 
 FO_TEST(testWorldRefusesBadMap) {
     FO_EXPECT(fo_world_new("not a map", 1) == NULL);
+}
+
+FO_TEST(testPlayerWithNoBodyIsStillAtTheOrigin) {
+    FOPlayer p;
+    memset(&p, 0, sizeof(p));
+    float x = 5, y = 5, vx = 5, vy = 5;
+    fo_player_position(&p, &x, &y);
+    fo_player_velocity(&p, &vx, &vy);
+    FO_EXPECT(x == 0 && y == 0);
+    FO_EXPECT(vx == 0 && vy == 0);
 }
