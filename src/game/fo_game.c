@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <mach/mach.h>
 #include "fo_assets.h"
 #include "fo_camera.h"
 #include "fo_controls.h"
@@ -179,6 +180,14 @@ static FOText *load_texts(void) {
 
 const char *fo_game_error(void) {
     return G.error;
+}
+
+// The resident memory of the app, for the speed log.
+static double resident_mb(void) {
+    struct task_basic_info info;
+    mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) return 0;
+    return info.resident_size / 1048576.0;
 }
 
 static double wall_seconds(void) {
@@ -648,8 +657,8 @@ void fo_game_frame(double dt) {
     G.fpsTime += (float)dt;
     if (G.fpsTime >= 1) {
         G.fps = G.fpsFrames / G.fpsTime;
-        fprintf(stderr, "fps %.1f calls %d update %.2f ms draw %.2f ms\n", G.fps, fo_gfx_draw_calls(),
-                G.updateTime * 1000 / G.fpsFrames, G.drawTime * 1000 / G.fpsFrames);
+        fprintf(stderr, "fps %.1f calls %d update %.2f ms draw %.2f ms memory %.1f MB\n", G.fps, fo_gfx_draw_calls(),
+                G.updateTime * 1000 / G.fpsFrames, G.drawTime * 1000 / G.fpsFrames, resident_mb());
         G.updateTime = G.drawTime = 0;
         G.fpsFrames = 0;
         G.fpsTime = 0;
