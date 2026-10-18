@@ -45,6 +45,13 @@ void fo_debug_poll(double dt) {
             }
             fo_game_touch(1, FO_TOUCH_ENDED, x2, y2);
             fprintf(stderr, "debug: drag %.0f %.0f to %.0f %.0f\n", x, y, x2, y2);
+        } else if (sscanf(line, "hold %f %f", &x, &y) == 2) {
+            // A finger that stays down until "release".
+            fo_game_touch(2, FO_TOUCH_BEGAN, x, y);
+            fprintf(stderr, "debug: hold %.0f %.0f\n", x, y);
+        } else if (sscanf(line, "release %f %f", &x, &y) == 2) {
+            fo_game_touch(2, FO_TOUCH_ENDED, x, y);
+            fprintf(stderr, "debug: release %.0f %.0f\n", x, y);
         } else if (sscanf(line, "tap %f %f", &x, &y) == 2) {
             fo_game_touch(1, FO_TOUCH_BEGAN, x, y);
             fo_game_touch(1, FO_TOUCH_ENDED, x, y);
