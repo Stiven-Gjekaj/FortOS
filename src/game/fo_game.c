@@ -11,6 +11,7 @@
 #include "fo_debug.h"
 #include "fo_font.h"
 #include "fo_gfx.h"
+#include "fo_look.h"
 #include "fo_maps.h"
 #include "fo_world.h"
 
@@ -18,9 +19,6 @@
 #define FO_ART 0.1f
 // The id of the local player in single player (xa.java:24).
 #define FO_LOCAL_ID 69
-
-static const char *kClassNames[10] = {"", "scout", "soldier", "pyro", "demoman", "heavy",
-                                      "engineer", "medic", "sniper", "spy"};
 
 static struct {
     char error[512];
@@ -30,6 +28,7 @@ static struct {
     FOFont pixel6, pixel12;
     FOMap map;
     int mapLoaded;
+    FOLook looks[FO_MAX_PLAYERS];
     FOCamera camera;
     FOControls controls;
     int localClass;
@@ -105,6 +104,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
         return 0;
     }
     fo_controls_layout(&G.controls, width, height);
+    fo_look_init(&G.sprites);
     fprintf(stderr, "start: %.3f s\n", wall_seconds() - start);
     return 1;
 }
@@ -134,25 +134,22 @@ static void apply_input(FOPlayer *p) {
     if (shoot && fo_player_can_shoot(world, p)) fo_player_shoot(world, p, p->weapon.angle * 0.017453292f);
 }
 
-static void draw_player(const FOPlayer *p) {
-    if (!p->alive) return;
-    char name[64];
-    snprintf(name, sizeof(name), "%s_%s_armsoverhead", p->team == FO_TEAM_RED ? "red" : "blu", kClassNames[p->cls]);
-    FOSprite s = fo_assets_sprite(&G.sprites, name);
-    float x, y;
-    fo_player_position(p, &x, &y);
-    float w = s.w * FO_ART, h = s.h * FO_ART;
-    fo_gfx_draw(&s, x - w / 2, y - 0.95f, w, h, 0, 0, 0, !p->facingRight, FO_WHITE);
-}
-
 static void draw_world(void) {
     float hw = G.camera.viewW / 2, hh = G.camera.viewH / 2;
     float left = G.camera.shownX - hw, bottom = G.camera.shownY - hh;
     float right = G.camera.shownX + hw, top = G.camera.shownY + hh;
     fo_gfx_view(left, bottom, right, top);
     fo_map_draw_back(&G.map, &G.sprites, G.camera.shownX, left, bottom, right, top);
+    FOWorld *world = G.map.world;
+    float now = world->now / 1000.0f;
+    // The layers of wz.java: the dead bodies, the projectiles, the players.
     for (int i = 0; i < FO_MAX_PLAYERS; i++) {
-        if (G.map.world->players[i].used) draw_player(&G.map.world->players[i]);
+        if (world->players[i].used) fo_look_dead(world, &world->players[i], now);
+    }
+    fo_look_bullets(world, now);
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) {
+        const FOPlayer *p = &world->players[i];
+        if (p->used && p->alive) fo_look_player(world, p, &G.looks[i], now, world->accumulator);
     }
     fo_map_draw_front(&G.map, &G.sprites, left, bottom, right, top);
 }
@@ -184,6 +181,7 @@ void fo_game_frame(double dt) {
     FOPlayer *p = local_player();
     apply_input(p);
     fo_world_update(G.map.world, (float)dt);
+    for (int i = 0; i < FO_MAX_PLAYERS; i++) G.looks[i].stateTime += (float)dt;
     fo_map_update(&G.map, (float)dt);
     if (p && p->alive) {
         float x, y;
