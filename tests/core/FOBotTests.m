@@ -341,3 +341,22 @@ FO_TEST(testBotsStopAtTheEndOfARound) {
     FO_EXPECT(fabsf(x1 - x0) < 0.05f);
     fo_world_free(world);
 }
+
+// --- The hats of the makers ------------------------------------------------
+
+FO_TEST(testBotsOfTheMakersWearTheirHats) {
+    FOWorld *world = newWorld(nil);
+    FOBots bots;
+    startBots(&bots, world, 4);
+    FOBot *a = fo_bots_add(&bots, world, 1, "gintrux69");
+    FOBot *b = fo_bots_add(&bots, world, 2, "bot lukas");
+    FOBot *c = fo_bots_add(&bots, world, 3, "homie");
+    run(world, &bots, 1);
+    FOPlayer *pa = fo_world_player(world, a->id), *pb = fo_world_player(world, b->id), *pc = fo_world_player(world, c->id);
+    FO_EXPECT(pa->cls != 0);
+    FO_EQUAL_INT(pa->hat, 1);
+    FO_EQUAL_INT(pa->loadout[pa->cls].hat, 1);
+    FO_EQUAL_INT(pb->hat, 15);
+    FO_EQUAL_INT(pc->hat, 0);
+    fo_world_free(world);
+}

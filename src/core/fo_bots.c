@@ -1255,10 +1255,25 @@ static void choose_class(FOBots *bots, FOWorld *world, FOBot *bot, FOPlayer *p) 
 }
 
 // BotController.a(float) (zm.java:39-82).
+// BotController.a(float) (zm.java:40-47): the bots with the names of the
+// makers wear the golden hat, and "bot lukas" the sombrero, at once.
+static void bot_hat(FOPlayer *p) {
+    int hat = 0;
+    if (strcmp(p->name, "gintrux69") == 0 || strcmp(p->name, "morlicando") == 0 || strcmp(p->name, "bot gintas") == 0) {
+        hat = 1;
+    } else if (strcmp(p->name, "bot lukas") == 0) {
+        hat = 15;
+    }
+    if (!hat || p->cls < 1 || p->cls > 9 || p->hat) return;
+    fo_player_set_loadout(p, p->cls, hat, p->loadout[p->cls].weapon);
+    p->hat = hat;
+}
+
 static void bot_update(FOBots *bots, FOWorld *world, FOBot *bot, float dt) {
     (void)dt;
     FOPlayer *p = bot_player(world, bot);
     if (!p) return;
+    bot_hat(p);
     FOBotContext c = {bots, world, bot, p};
     aim_prune(&c);
     if (!p->alive || fo_mode_over(world)) {
