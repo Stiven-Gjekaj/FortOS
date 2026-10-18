@@ -46,7 +46,13 @@ gh release create "$TAG" -R "$REPO" -t "FortOS $VERSION" -F build/notes.md "buil
     scripts/update.sh "$ROOT/build/$DEB"
     git add debs Packages Packages.bz2 Packages.gz Release
     git commit -qm "feat: add FortOS $VERSION"
-    sed -i '' "s/^| FortOS (\`io.github.stivengjekaj.fortos\`) | [0-9.]* |/| FortOS (\`io.github.stivengjekaj.fortos\`) | $VERSION |/" README.md
+    export ROW="| FortOS (\`io.github.stivengjekaj.fortos\`) | $VERSION | iOS 6 or newer |"
+    if grep -q '^| FortOS (' README.md; then
+        sed -i '' "s/^| FortOS (\`io.github.stivengjekaj.fortos\`) | [0-9.]* |/| FortOS (\`io.github.stivengjekaj.fortos\`) | $VERSION |/" README.md
+    else
+        # The first release adds a row under the last row of the table.
+        perl -0pi -e 's/((?:^\| \S+ \(`io\.github[^\n]*\n)+)/$1$ENV{ROW}\n/m' README.md
+    fi
     git add README.md
     git commit -qm "docs: list FortOS $VERSION"
     git push -q
