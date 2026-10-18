@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.0 (2026-10-18)
+
+- The sounds and the music of GANGFORT, decoded on the phone from the
+  APK:
+  - the theme plays in the menus and softer in a match,
+  - each sound in the world has a volume and a pan from its place, as in
+    GANGFORT,
+  - the loops of the heal beam and the flamethrower.
+- The effects of GANGFORT: the explosions, the hits on walls, the blood,
+  the dust of a landing, the smoke of the rockets, a sentry that breaks,
+  the big blast of the bomb, and the effects of each map.
+- The camera shakes at an explosion.
+- The kill cam: the frame stops and zooms on the killer, with the name of
+  the killer, and the music and the sounds fade.
+- The flies and the birds of the maps. A flame burns a fly, and a bird
+  flies away from a player or a shot.
+- The classes of the players run on the bottom bar of the round-over
+  dialog: the winners shoot, and the losers run away.
+- The ammo bar and the health bar draw their fill on top, as in GANGFORT.
+
 ## 0.6.0 (2026-10-18)
 
 - The bots of single player, ported from GANGFORT:
