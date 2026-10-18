@@ -100,6 +100,53 @@ FOPhysFixture *fo_phys_circle(FOPhysBody *body, float radius, float cx, float cy
     return OUT(add(B(body), &shape, def));
 }
 
+// The number of points in the convex hull of the points, with the weld of
+// b2PolygonShape::Set. Box2D stops on a hull of fewer than 3 points.
+static int hull_count(const b2Vec2 *in, int count) {
+    b2Vec2 ps[b2_maxPolygonVertices];
+    int n = 0;
+    for (int i = 0; i < count; i++) {
+        bool unique = true;
+        for (int j = 0; j < n; j++) {
+            if (b2DistanceSquared(in[i], ps[j]) < (0.5f * b2_linearSlop) * (0.5f * b2_linearSlop)) unique = false;
+        }
+        if (unique) ps[n++] = in[i];
+    }
+    if (n < 3) return n;
+    // Gift wrapping from the point with the largest x.
+    int first = 0;
+    for (int i = 1; i < n; i++) {
+        if (ps[i].x > ps[first].x || (ps[i].x == ps[first].x && ps[i].y < ps[first].y)) first = i;
+    }
+    int hull = 0, ih = first;
+    for (;;) {
+        hull++;
+        int ie = 0;
+        for (int j = 1; j < n; j++) {
+            if (ie == ih) {
+                ie = j;
+                continue;
+            }
+            b2Vec2 r = ps[ie] - ps[ih], v = ps[j] - ps[ih];
+            float c = b2Cross(r, v);
+            if (c < 0.0f || (c == 0.0f && v.LengthSquared() > r.LengthSquared())) ie = j;
+        }
+        ih = ie;
+        if (ie == first || hull > n) break;
+    }
+    return hull;
+}
+
+FOPhysFixture *fo_phys_polygon(FOPhysBody *body, const float *xy, int count, const FOFixtureDef *def) {
+    if (count < 3 || count > b2_maxPolygonVertices) return NULL;
+    b2Vec2 points[b2_maxPolygonVertices];
+    for (int i = 0; i < count; i++) points[i].Set(xy[2 * i], xy[2 * i + 1]);
+    if (hull_count(points, count) < 3) return NULL;
+    b2PolygonShape shape;
+    shape.Set(points, count);
+    return OUT(add(B(body), &shape, def));
+}
+
 void fo_phys_body_position(const FOPhysBody *body, float *x, float *y) {
     b2Vec2 p = CB(body)->GetPosition();
     *x = p.x;

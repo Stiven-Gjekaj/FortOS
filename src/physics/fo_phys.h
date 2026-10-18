@@ -47,6 +47,9 @@ void *fo_phys_body_user(const FOPhysBody *body);
 FOPhysFixture *fo_phys_box(FOPhysBody *body, float half_w, float half_h, float cx, float cy, float angle,
                            const FOFixtureDef *def);
 FOPhysFixture *fo_phys_circle(FOPhysBody *body, float radius, float cx, float cy, const FOFixtureDef *def);
+// A convex polygon of count points (x, y) in xy, from 3 to 8 points.
+// Returns NULL when the points do not make a polygon.
+FOPhysFixture *fo_phys_polygon(FOPhysBody *body, const float *xy, int count, const FOFixtureDef *def);
 
 void fo_phys_body_position(const FOPhysBody *body, float *x, float *y);
 float fo_phys_body_angle(const FOPhysBody *body);
