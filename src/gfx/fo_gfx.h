@@ -50,6 +50,12 @@ enum {
 // to 1 (far).
 void fo_gfx_depth(int mode, float z);
 
+// The pass of the scope of the sniper rifle: the next sprites take their
+// alpha from the red channel of mask. The mask covers the world rectangle
+// (x, y, w, h) and turns by angle radians around its middle.
+void fo_gfx_scope_begin(const FOTexture *mask, float x, float y, float w, float h, float angle);
+void fo_gfx_scope_end(void);
+
 // Darkens the edges of the frame, as the vignette of GANGFORT. Call it
 // after the frame is drawn.
 void fo_gfx_vignette(void);

@@ -24,7 +24,8 @@ typedef struct {
 
 static FOVertex gVertices[FO_MAX_SPRITES * 4];
 static int gSprites;
-static FOProgram gPlain;
+static FOProgram gPlain, gScope;
+static GLint gScopeMask, gScopeAngle;
 static FOTexture gVignette;
 static FOProgram *gProgram;
 static GLuint gIndexBuffer;
@@ -59,6 +60,44 @@ static const char *kPlainShader =
     "varying lowp vec4 v_color;\n"
     "void main() {\n"
     "    gl_FragColor = texture2D(texture, v_texcoord) * v_color;\n"
+    "}\n";
+
+// res/shaders/sniperaim.vert and .frag of GANGFORT: the blurred map,
+// with the alpha of the red channel of the mask. The mask lies at the
+// rifle and turns with the aim, so the map is sharp in a cone in front of
+// the rifle. The pass also darkens the edges and the whole picture.
+static const char *kScopeVertex =
+    "uniform vec4 view;\n"
+    "uniform highp vec4 maskRect;\n"
+    "uniform highp vec2 aim;\n"
+    "attribute vec3 position;\n"
+    "attribute vec2 texcoord;\n"
+    "attribute vec4 color;\n"
+    "varying vec2 v_texcoord;\n"
+    "varying highp vec2 v_mask;\n"
+    "void main() {\n"
+    "    v_texcoord = texcoord;\n"
+    "    highp vec2 m = vec2((position.x - maskRect.x) / maskRect.z, (position.y - maskRect.y - maskRect.w) / -maskRect.w);\n"
+    "    m = m - 0.5;\n"
+    "    v_mask = mat2(aim.x, aim.y, -aim.y, aim.x) * m + 0.5;\n"
+    "    gl_Position = vec4(position.xy * view.xy + view.zw, position.z, 1.0);\n"
+    "}\n";
+
+// The mask coordinate is linear in the position, so the vertex shader
+// makes it. Reason: a cos and a sin in each pixel are too slow on the A5.
+static const char *kScopeFragment =
+    "uniform sampler2D texture;\n"
+    "uniform sampler2D mask;\n"
+    "uniform mediump vec2 resolution;\n"
+    "varying mediump vec2 v_texcoord;\n"
+    "varying highp vec2 v_mask;\n"
+    "void main() {\n"
+    "    lowp vec4 tex = texture2D(texture, v_texcoord);\n"
+    "    lowp float a = texture2D(mask, v_mask).r;\n"
+    "    mediump float len = length(gl_FragCoord.xy / resolution - 0.5);\n"
+    "    mediump float vignette = smoothstep(0.7, 0.4, len);\n"
+    "    mediump vec3 rgb = mix(tex.rgb, tex.rgb * vignette, 0.5) - 0.03;\n"
+    "    gl_FragColor = vec4(rgb * a, a);\n"
     "}\n";
 
 static GLuint compile(GLenum type, const char *source) {
@@ -108,6 +147,12 @@ static void use_program(FOProgram *program) {
 int fo_gfx_init(void) {
     GLuint vertex = compile(GL_VERTEX_SHADER, kVertexShader);
     if (!make_program(&gPlain, vertex, kPlainShader)) return 0;
+    GLuint scopeVertex = compile(GL_VERTEX_SHADER, kScopeVertex);
+    if (make_program(&gScope, scopeVertex, kScopeFragment)) {
+        glUniform1i(glGetUniformLocation(gScope.program, "mask"), 1);
+        gScopeMask = glGetUniformLocation(gScope.program, "maskRect");
+        gScopeAngle = glGetUniformLocation(gScope.program, "aim");
+    }
 
     // Each sprite is two triangles over four vertices.
     static GLushort indices[FO_MAX_SPRITES * 6];
@@ -226,6 +271,23 @@ void fo_gfx_vignette(void) {
     fo_gfx_draw(&s, 0, 0, 1, 1, 0, 0, 0, 0, FO_WHITE);
     fo_gfx_flush();
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+void fo_gfx_scope_begin(const FOTexture *mask, float x, float y, float w, float h, float angle) {
+    if (!gScope.program || !mask || !mask->id) return;
+    fo_gfx_flush();
+    use_program(&gScope);
+    glUniform4f(gScopeMask, x, y, w, h);
+    glUniform2f(gScopeAngle, cosf(angle), sinf(angle));
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, mask->id);
+    glActiveTexture(GL_TEXTURE0);
+}
+
+void fo_gfx_scope_end(void) {
+    if (gProgram != &gScope) return;
+    fo_gfx_flush();
+    use_program(&gPlain);
 }
 
 void fo_gfx_flush(void) {
