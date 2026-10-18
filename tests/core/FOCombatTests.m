@@ -43,10 +43,12 @@ FO_TEST(testCombatSpawnGivesTheWeaponOfTheClass) {
     FO_EQUAL_INT(p->weapon.def->item, FO_ITEM_ROCKET_LAUNCHER);
     FO_EQUAL_INT((int)p->weapon.ammo, 20);
     // A loadout weapon of the class replaces the default one.
-    p->primaryItem = FO_ITEM_UDDERGUN;
+    fo_player_set_loadout(p, FO_CLASS_HEAVY, 0, FO_ITEM_UDDERGUN);
     fo_world_spawn(world, p, FO_CLASS_HEAVY);
     FO_EQUAL_INT(p->weapon.def->item, FO_ITEM_UDDERGUN);
     // A loadout weapon of another class does not.
+    fo_player_set_loadout(p, FO_CLASS_SCOUT, 0, FO_ITEM_UDDERGUN);
+    FO_EQUAL_INT(p->loadout[FO_CLASS_SCOUT].weapon, 0);
     fo_world_spawn(world, p, FO_CLASS_SCOUT);
     FO_EQUAL_INT(p->weapon.def->item, FO_ITEM_SAWNGUN);
     fo_world_free(world);

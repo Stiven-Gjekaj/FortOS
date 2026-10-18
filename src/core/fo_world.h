@@ -73,6 +73,8 @@ typedef enum {
     FO_OBJ_BOMB,        // RollableBomb (act)
     FO_OBJ_CHECKPOINT,  // BombCheckpoint (xf)
     FO_OBJ_FLAG,        // CtfFlag (acm)
+    FO_OBJ_HAT,         // A Hat (aan) that fell off a dead player
+    FO_OBJ_DROP,        // RandomPixelDrop (xt): a golden drop
 } FOObjKind;
 
 // The head of each object with a body. The user data of the body points
@@ -132,6 +134,23 @@ typedef struct {
     float turnTime;          // t: ms of the turn.
     int facingRight;         // n
 } FOCorpse;
+
+// The hat of a dead player (Hat.a(...), aan.java): its body falls and turns
+// from the place of the hat on the head. It goes when the player spawns.
+typedef struct {
+    FOObj obj;
+    int active;
+    int item;                // The item id of the hat.
+    long long start;         // The time of the death.
+    int facingRight;
+} FOFallenHat;
+
+// The hat and the weapon that the player chose for a class
+// (PlayerItemSelectionSettings). 0 is no hat, or the default weapon.
+typedef struct {
+    int hat;
+    int weapon;
+} FOLoadout;
 
 // WeaponPickup (xx.java): the weapon that a dead player drops. A touch
 // gives 30 % of the full ammo to the weapon of any player.
@@ -194,7 +213,11 @@ typedef struct FOPlayer {
     long long deathTime;     // B: the time of death, or 0.
     long long hurtTime;      // A: the time that the health last went down.
     FOWeapon weapon;
-    int primaryItem;         // The item id of the weapon of the loadout, or 0.
+    FOLoadout loadout[10];   // By class.
+    int hat;                 // The item id of the hat on the head, or 0.
+    float hatX, hatY;        // The middle of the hat on the head, from fo_player_hat_place.
+    int hatPlaced;
+    FOFallenHat fallenHat;
     int score;               // P
     FODamage damage[FO_DAMAGE_MAX];
     int killer;              // q: the id of the last killer.
@@ -238,6 +261,17 @@ typedef struct {
 } FOBullet;
 
 #define FO_MAX_BULLETS 160
+
+// RandomPixelDrop (xt.java): a pixel that jumps up and falls. It goes 4 s
+// after its start (abn.java:84).
+typedef struct {
+    FOObj obj;
+    int active;
+    long long start;
+} FODrop;
+
+#define FO_MAX_DROPS 64
+
 
 // The events of one frame, for the sounds, the effects, and the kill feed.
 typedef enum {
@@ -354,6 +388,7 @@ typedef struct FOWorld {
     FOBullet bullets[FO_MAX_BULLETS];
     FOEvent events[FO_MAX_EVENTS];
     int event_count;
+    FODrop drops[FO_MAX_DROPS];
     FOMode mode;
     long long roundEnd;      // d of ws.java: the time of the next round, or 0.
     int localId;             // The id of the local player, for the hint of the bomb.
@@ -469,6 +504,18 @@ void fo_world_sound(FOWorld *world, const char *name, float x, float y, int atta
 // The jump of the input (Player.t, xn.java:705-724). Returns 1 when the
 // player jumps.
 int fo_player_jump(FOWorld *world, FOPlayer *player);
+
+// Sets the hat and the weapon of the class. They take effect at the next
+// spawn in the class. An item that the class cannot use is not kept.
+void fo_player_set_loadout(FOPlayer *player, int cls, int hat, int weapon);
+
+// The renderer gives the middle of the hat on the head in each frame. The
+// hat falls from this place at the death.
+void fo_player_hat_place(FOPlayer *player, float x, float y);
+
+// Starts count golden drops at (x, y), as GoldenHat at a point of its
+// player (abn.java:73-81). Each drop takes a random speed.
+void fo_world_drops(FOWorld *world, float x, float y, int count);
 
 // The position and the velocity of the body of a player.
 void fo_player_position(const FOPlayer *player, float *x, float *y);

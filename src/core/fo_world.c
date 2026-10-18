@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include "fo_world_private.h"
+#include "fo_items.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,6 +14,8 @@
 float fo_angle_norm(float angle) {
     return (float)((double)angle - 6.2831854820251465 * floor((3.1415927f + angle) / 6.2831855f));
 }
+
+static void hat_stop(FOWorld *world, FOPlayer *p);
 
 float fo_world_random(FOWorld *world) {
     // xorshift32. The numbers do not need to agree with Java.
@@ -312,15 +315,94 @@ void fo_world_spawn(FOWorld *world, FOPlayer *p, int cls) {
     p->health = fo_class_health(cls);
     p->alive = 1;
     p->deathTime = 0;
-    // The weapon of the class, full (xn.java:851-874).
-    const FOWeaponDef *def = fo_weapon_def(p->primaryItem);
+    // The weapon of the class, full (xn.java:851-874), and the items of the
+    // loadout of the class (PlayerEquipmentManager, aaz.java).
+    const FOLoadout *l = cls >= 1 && cls <= 9 ? &p->loadout[cls] : NULL;
+    const FOWeaponDef *def = l ? fo_weapon_def(l->weapon) : NULL;
     if (!def || def->cls != cls) def = fo_weapon_default(cls);
+    p->hat = l ? l->hat : 0;
+    p->hatPlaced = 0;
+    hat_stop(world, p);
     p->weapon.def = def;
     p->weapon.ammo = def ? def->ammo : 0;
     p->weapon.angle = 0;
     p->weapon.lastShot = 0;
     p->sniperCharge = 0;
     fo_combat_reset(p);
+}
+
+void fo_player_set_loadout(FOPlayer *p, int cls, int hat, int weapon) {
+    if (cls < 1 || cls > 9) return;
+    p->loadout[cls].hat = fo_item_allowed(hat, cls) && fo_item(hat)->kind == FO_ITEM_HAT ? hat : 0;
+    p->loadout[cls].weapon = fo_item_allowed(weapon, cls) && fo_item(weapon)->kind == FO_ITEM_WEAPON ? weapon : 0;
+}
+
+void fo_player_hat_place(FOPlayer *p, float x, float y) {
+    p->hatX = x;
+    p->hatY = y;
+    p->hatPlaced = 1;
+}
+
+// Hat.a(float, float, ada, boolean, boolean) (aan.java:47-56): at the death
+// the body of the hat takes the speed of the player and turns at 2 to 6
+// radians each second. The polygons are from the bottom left of the
+// region, and the body is at its middle (akq.java).
+static void hat_fall(FOWorld *world, FOPlayer *p) {
+    const FOItem *item = fo_item(p->hat);
+    if (!item || item->kind != FO_ITEM_HAT || !p->hatPlaced) return;
+    FOFallenHat *h = &p->fallenHat;
+    h->obj.kind = FO_OBJ_HAT;
+    h->obj.w = item->w;
+    h->obj.h = item->h;
+    h->obj.body = fo_phys_body_new(world->phys, FO_BODY_DYNAMIC, p->hatX, p->hatY, 0, &h->obj);
+    FOFixtureDef def = {0.5f, 0.2f, 0, FO_CAT_DEBRIS, FO_CAT_GROUND, 0};
+    for (int i = 0; i < item->polygonCount; i++) {
+        float xy[FO_HAT_VERTICES * 2];
+        int n = item->polygonSizes[i];
+        for (int k = 0; k < n; k++) {
+            xy[2 * k] = item->polygons[i][2 * k] - item->w / 2;
+            xy[2 * k + 1] = item->polygons[i][2 * k + 1] - item->h / 2;
+        }
+        fo_phys_polygon(h->obj.body, xy, n, &def);
+    }
+    float vx, vy;
+    fo_player_velocity(p, &vx, &vy);
+    fo_phys_body_set_velocity(h->obj.body, vx, vy);
+    fo_phys_body_set_angular_velocity(h->obj.body, 2.0f + 4.0f * fo_world_random(world));
+    h->active = 1;
+    h->item = p->hat;
+    h->start = world->now;
+    h->facingRight = p->facingRight;
+}
+
+static void hat_stop(FOWorld *world, FOPlayer *p) {
+    FOFallenHat *h = &p->fallenHat;
+    if (h->obj.body) fo_phys_body_free(world->phys, h->obj.body);
+    memset(h, 0, sizeof(*h));
+}
+
+// RandomPixelDrop.c(float, float) (xt.java): a box of 0.1 m that jumps
+// with a random speed and turns.
+void fo_world_drops(FOWorld *world, float x, float y, int count) {
+    for (int i = 0; i < FO_MAX_DROPS && count > 0; i++) {
+        FODrop *d = &world->drops[i];
+        if (d->active) continue;
+        if (!d->obj.body) {
+            d->obj.kind = FO_OBJ_DROP;
+            d->obj.w = d->obj.h = 0.1f;
+            d->obj.body = fo_phys_body_new(world->phys, FO_BODY_DYNAMIC, -5, -5, 0, &d->obj);
+            FOFixtureDef def = {0.3f, 1.0f, 0.5f, FO_CAT_DEBRIS, FO_CAT_GROUND, 0};
+            fo_phys_box(d->obj.body, 0.05f, 0.05f, 0, 0, 0, &def);
+        }
+        fo_phys_body_set_active(d->obj.body, 1);
+        fo_phys_body_set_transform(d->obj.body, x, y, 0);
+        fo_phys_body_set_velocity(d->obj.body, -3.0f + 6.0f * fo_world_random(world), 3.5f + 3.0f * fo_world_random(world));
+        fo_phys_body_set_angular_velocity(d->obj.body, 10.0f + 30.0f * fo_world_random(world));
+        fo_phys_body_set_awake(d->obj.body, 1);
+        d->active = 1;
+        d->start = world->now;
+        count--;
+    }
 }
 
 void fo_player_set_health(FOWorld *world, FOPlayer *p, float health) {
@@ -377,6 +459,7 @@ static void corpse_land(FOWorld *world, FOCorpse *c, FOObj *ground) {
 void fo_player_die(FOWorld *world, FOPlayer *p) {
     if (!p->alive) return;
     corpse_start(world, p);
+    hat_fall(world, p);
     fo_combat_drop(world, p);
     p->deathTime = world->now;
     p->alive = 0;
@@ -772,6 +855,16 @@ void fo_world_update(FOWorld *world, float dt) {
         if (c->active && world->now - c->start > 9000) {
             c->active = 0;
             fo_phys_body_set_active(c->obj.body, 0);
+        }
+        // The hat is gone at the end of its fade, 9 s after the death.
+        FOFallenHat *h = &world->players[i].fallenHat;
+        if (h->active && world->now - h->start > 9000) hat_stop(world, &world->players[i]);
+    }
+    for (int i = 0; i < FO_MAX_DROPS; i++) {
+        FODrop *d = &world->drops[i];
+        if (d->active && world->now - d->start >= 4000) {
+            d->active = 0;
+            fo_phys_body_set_active(d->obj.body, 0);
         }
     }
     map_update(world);
