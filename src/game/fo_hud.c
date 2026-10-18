@@ -17,6 +17,8 @@ static float gRoundTime;
 // The alpha of the hint of the bomb (act.java:265-270).
 static float gHintAlpha;
 static char gMapName[32];
+// The kill cam shows: the name of the killer, or "" with no kill cam.
+static char gKillcam[32];
 
 // WeaponInfoHUD: the shown health and ammo fall with a lerp of 0.2 each
 // frame, and rise at once (ajt.java:99-121).
@@ -320,6 +322,10 @@ static void draw_objective(const FOWorld *world, const FOPlayer *local) {
     }
 }
 
+void fo_hud_killcam(const char *killer) {
+    snprintf(gKillcam, sizeof(gKillcam), "%s", killer ? killer : "");
+}
+
 void fo_hud_map(const char *name) {
     snprintf(gMapName, sizeof(gMapName), "%s", name);
 }
@@ -339,7 +345,10 @@ void fo_hud_draw(const FOWorld *world, const FOPlayer *local, float dt) {
     int over = fo_mode_over(world);
     if (local && local->cls && local->alive && !over && !fo_mode_bomb_down(world)) draw_weapon_info(local);
     if (!over) draw_objective(world, local);
-    draw_kill_feed();
+    // GameScreen.e() (aeb.java:675-680): the kill feed hides in the kill cam,
+    // and the bars of the kill cam cover the objective.
+    if (gKillcam[0]) fo_hud_death_cam(gKillcam);
+    else draw_kill_feed();
     if (local) draw_respawn(world, local);
 }
 
@@ -521,4 +530,24 @@ void fo_hud_sniper(float x, float y, float angle, float charge) {
     FOSprite icon = sprite(name);
     float iw = 9 * u, ih = 5 * u;
     if (icon.w) fo_gfx_draw(&icon, x - iw / 2, u + (y - ih / 2) + ih / 2, iw, ih, 0, 0, 0, 0, FO_WHITE);
+}
+
+// DeathCamHUD (aib.java): a dark bar at the top and at the bottom, and the
+// name of the killer in the top bar.
+void fo_hud_death_cam(const char *killer) {
+    float h = gH * 25.0f / 150.0f;
+    FOSprite bg = sprite("menu_bgcolor");
+    if (bg.w) {
+        fo_gfx_draw(&bg, 0, 0, gW, h, 0, 0, 0, 0, FO_WHITE);
+        fo_gfx_draw(&bg, 0, gH - h, gW, h, 0, 0, 0, 0, FO_WHITE);
+    }
+    char text[96];
+    snprintf(text, sizeof(text), "%s", fo_text_get(gTexts, "killed_message"));
+    char *mark = strstr(text, "{0}");
+    if (mark) snprintf(mark, sizeof(text) - (size_t)(mark - text), "%s", killer);
+    float lh = fo_font_line(gFont6, gU);
+    int lines = 1;
+    for (const char *c = text; *c; c++) lines += *c == '\n';
+    float top = gH - h / 2 + lines * lh / 2;
+    fo_font_draw(gFont6, text, gW / 2, top, gU, FO_WHITE, FO_ALIGN_CENTER);
 }
