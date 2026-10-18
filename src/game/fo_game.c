@@ -36,7 +36,8 @@ static struct {
     int localClass;
     short localTeam;
     int debugMove;
-    int aimHeld;             // j of aeb.java: the shoot stick was held in the last frame.
+    int aimHeld;
+    FOTexture scopeMask;     // res/textures/sniper_aim_alpha_mask.png             // j of aeb.java: the shoot stick was held in the last frame.
     const char *icons[FO_BUTTON_COUNT];
     int debugShoot;
     float debugAim;
@@ -110,6 +111,7 @@ int fo_game_start(const char *apk_path, int width, int height) {
     }
     fo_controls_layout(&G.controls, width, height);
     fo_look_init(&G.sprites);
+    G.scopeMask = fo_assets_texture("textures/sniper_aim_alpha_mask.png");
     char *texts = (char *)fo_assets_read("texts/gangforttexts.properties", NULL);
     G.texts = texts ? fo_text_parse(texts) : NULL;
     free(texts);
@@ -229,6 +231,24 @@ static void tap_world(float sx, float sy) {
     }
 }
 
+// The pass of the scope (aeb.java:290-318): the blurred map over the
+// world, with a sharp cone in front of the rifle.
+static void draw_scope(const FOPlayer *p) {
+    if (!p || !p->alive || p->cls != FO_CLASS_SNIPER || !p->weapon.def || p->weapon.angle == 0) return;
+    FOSprite blurred = fo_assets_sprite(&G.map.atlas, "blurred_map");
+    if (!blurred.w || !G.scopeMask.id) return;
+    const FOLook *look = &G.looks[p - G.map.world->players];
+    float a = p->weapon.angle * 0.017453292f;
+    float mw = G.scopeMask.width * 0.1f, mh = G.scopeMask.height * 0.1f;
+    float mx = look->scopeX - mw / 2 + (mw / 2) * cosf(a);
+    float my = look->scopeY - mh / 2 + (mw / 2) * sinf(a);
+    fo_gfx_scope_begin(&G.scopeMask, mx, my, mw, mh, a);
+    float w = blurred.w * 0.1f, h = blurred.h * 0.1f;
+    float mapW = G.map.world->map.width, mapH = G.map.world->map.height;
+    fo_gfx_draw(&blurred, -(w - mapW) / 2, -(h - mapH) / 2, w, h, 0, 0, 0, 0, FO_WHITE);
+    fo_gfx_scope_end();
+}
+
 static void draw_world(void) {
     float hw = G.camera.viewW / 2, hh = G.camera.viewH / 2;
     float left = G.camera.shownX - hw, bottom = G.camera.shownY - hh;
@@ -252,6 +272,7 @@ static void draw_world(void) {
     }
     fo_look_sentries(world, now);
     fo_map_draw_front(&G.map, &G.sprites, left, bottom, right, top);
+    draw_scope(viewer);
 }
 
 static void draw_hud(void) {
@@ -259,6 +280,14 @@ static void draw_hud(void) {
     float u = G.width / 281.0f;
     FOPlayer *p = local_player();
     fo_hud_draw(G.map.world, p, 0);
+    if (p && p->alive && p->cls == FO_CLASS_SNIPER && p->weapon.angle != 0) {
+        const FOLook *look = &G.looks[p - G.map.world->players];
+        float a = p->weapon.angle * 0.017453292f;
+        float wx = look->scopeX - cosf(a) * 1.0f, wy = look->scopeY - sinf(a) * 1.0f;
+        float sx = (wx - (G.camera.shownX - G.camera.viewW / 2)) / G.camera.viewW * G.width;
+        float sy = (wy - (G.camera.shownY - G.camera.viewH / 2)) / G.camera.viewH * G.height;
+        fo_hud_sniper(sx, sy, a, p->sniperCharge);
+    }
     update_buttons(p, G.icons);
     fo_controls_draw(&G.controls, &G.sprites, p ? p->team : FO_TEAM_BLU, p && p->cls == FO_CLASS_SNIPER, G.icons);
     char text[128];
@@ -289,7 +318,22 @@ void fo_game_frame(double dt) {
     if (p && p->alive) {
         float x, y;
         fo_player_position(p, &x, &y);
-        fo_camera_update(&G.camera, (float)dt, x, y, G.map.world->map.width, G.map.world->map.height);
+        FOWorld *world = G.map.world;
+        // GameCamera.a(alh) (wp.java:69-103): the sniper looks ahead of its aim.
+        if (p->cls == FO_CLASS_SNIPER && p->weapon.def && p->weapon.angle != 0) {
+            float c = cosf(p->weapon.angle * 0.017453292f), sn = sinf(p->weapon.angle * 0.017453292f);
+            float fl = p->obj.w * 1.5f, fm = p->obj.h;
+            float vw = G.camera.viewW, vh = G.camera.viewH;
+            x += (-vw / 2 + fl) + ((vw / 2 - fl) - (-vw / 2 + fl)) * ((c + 1) / 2);
+            y += (-vh / 2 + fm) + ((vh / 2 - fm) - (-vh / 2 + fm)) * ((sn + 1) / 2);
+        }
+        // The shake of a shot of the player, or of a hit on the player.
+        if (p->weapon.def && world->now - p->weapon.lastShot < 100) {
+            fo_camera_shake(&G.camera, p->weapon.def->shakeMs, p->weapon.def->shake);
+        } else if (world->now - p->hurtTime < 300 && G.camera.shakeTime <= 0) {
+            fo_camera_shake(&G.camera, 300, 0.075f);
+        }
+        fo_camera_update(&G.camera, (float)dt, x, y, world->map.width, world->map.height);
     }
     double t1 = wall_seconds();
     fo_gfx_begin(G.width, G.height, fo_rgb(0x000000));
