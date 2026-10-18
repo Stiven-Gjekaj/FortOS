@@ -32,13 +32,14 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 - Test the walk, the jump, the doors, and the death areas with the values
   of the original code.
 
-## 0.3: the first fight
+## 0.3: the first fight (done, 2026-10-18)
 
 - Draw the characters from their parts, with the run, jump, and aim
   animations.
 - Add the weapon base: the ammo, the fire interval, the spread, and the
   slow down after a shot.
-- Add the projectiles and the hitscan, with the damage and the splash.
+- Add the projectiles and the rockets, with the damage and the rocket
+  jump.
 - Add the health, the death, the respawn after 10 seconds, and the kill
   credit.
 - Add the health fridge and the weapon pickups.
@@ -47,7 +48,8 @@ weapons, 3 game modes, 3 maps with bot paths, 34 hats, and 41 sounds.
 ## 0.4: all classes
 
 - Add the 9 classes with their health and speed.
-- Port the 9 default weapons.
+- Port the 9 default weapons, with the flames, the grenades and their
+  splash, and the hitscan of the sniper rifle.
 - Add the double jump of the rusher and the rocket jump of the marine.
 - Add the burn of the torcher.
 - Add the sentry gun of the builder.
